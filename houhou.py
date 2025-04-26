@@ -3,18 +3,29 @@ import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 import random
+import tomllib
 
 
 class SrsApp:
-    def __init__(self, db_folder: str = "./db"):
+    def __init__(self):
+        with open("config.toml", "rb") as f:
+            config = tomllib.load(f)
+
+        self.max_reviews_at_once = config["max_reviews_at_once"]
+        self.entries_before_commit = config["entries_before_commit"]
+        self.match_score_threshold = config["match_score_threshold"]
+        self.srs_interval = config["srs_interval"]
+        path_to_srs_db = config["path_to_srs_db"]
+        path_to_full_db = config["path_to_full_db"]
+
         self.id_srs_db = "srs_db"
         self.name_srs_table = self.id_srs_db + ".SrsEntrySet"
-
-        name_srs_db = "SrsDatabase.sqlite"
-        name_full_db = "KanjiDatabase.sqlite"
-
-        path_to_srs_db = os.path.join(db_folder, name_srs_db)
-        path_to_full_db = os.path.join(db_folder, name_full_db)
+        self.entries_without_commit = 0
+        self.current_reviews = []
+        self.current_index = 0
+        self.current_completed = 0
+        self.due_review_ids = []
+        self.len_review_ids = 0
 
         try:
             self.conn = sqlite3.connect(path_to_full_db)
@@ -24,30 +35,7 @@ class SrsApp:
 
         self.cursor = self.conn.cursor()
         self.cursor.execute(f"ATTACH DATABASE '{path_to_srs_db}' AS {self.id_srs_db};")
-
-        self.max_reviews_at_once = 10
-
-        # in days
-        self.srs_interval = {
-            0: 1 / 6,
-            1: 1 / 3,
-            2: 1,
-            3: 3,
-            4: 7,
-            5: 14,
-            6: 30,
-            7: 120,
-            8: None
-        }
-
-        self.current_reviews = []
-        self.current_index = 0
-        self.meaning_correct = None
-        self.reading_correct = None
-        self.due_review_ids = []
         
-        # Stats
-        self.review_count = 0
         
     def close_db(self):
 
@@ -148,6 +136,7 @@ class SrsApp:
 
         sorted_df = df.sort_values("NextAnswerDateISO", ascending = False)
         self.due_review_ids = sorted_df["ID"].tolist()
+        self.len_review_ids = len(self.due_review_ids)
 
         current_ids = set()
 
@@ -169,6 +158,7 @@ class SrsApp:
             SELECT * FROM {self.name_srs_table}
             WHERE {id_col} = {current_id};
             """
+
         df = pd.read_sql_query(q, self.conn)
         item = df.to_dict("records")
         self.add_to_review(item)
@@ -206,17 +196,72 @@ class SrsApp:
         random.shuffle(self.current_reviews)
 
     def update_item(self, item_id, res):
-        return f"updated {item_id} with {res}"
+        id_col = "ID"
+        q_retrieve_item = f"""
+                          SELECT 
+                              CurrentGrade,
+                              FailureCount,
+                              SuccessCount
+                          FROM {self.name_srs_table}
+                          WHERE {id_col} = {item_id};
+                          """
+        q_update_item = f"""
+                        UPDATE {self.name_srs_table}
+                        SET
+                            CurrentGrade = ?,
+                            FailureCount = ?,
+                            SuccessCount = ?,
+                            LastUpdateDateISO = datetime('now'),
+                            NextAnswerDateISO = ?
+                        WHERE {id_col} = {item_id};
+                        """
+
+        df = pd.read_sql_query(q_retrieve_item, self.conn)
+        row = df.to_dict("records")[0]
+
+        current_time = datetime.now(timezone.utc)
+        
+        if res:
+            row["CurrentGrade"] += 1
+            row["SuccessCount"] += 1
+
+        else:
+            row["CurrentGrade"] = max(0, row["CurrentGrade"] - 1)
+            row["FailureCount"] += 1
+
+        current_grade_key = str(row["CurrentGrade"])
+        current_grade_dict = self.srs_interval[current_grade_key]
+
+        match current_grade_dict:
+            case -1:
+                review_time = None
+
+            case _:
+                match current_grade_dict["unit"]:
+                    case "hours":
+                        review_datetime = datetime.now(timezone.utc) + timedelta(hours = current_grade_dict["value"])
+
+                    case "days":
+                        review_datetime = datetime.now(timezone.utc) + timedelta(days = current_grade_dict["value"])
+
+                review_time = review_datetime.strftime("%Y-%m-%d %H:%M:%S")
+
+        self.conn.execute(q_update_item, (row["CurrentGrade"], row["FailureCount"], row["SuccessCount"], review_time))
+        self.entries_without_commit += 1
+        self.current_completed += 1
+        
+        if self.entries_without_commit >= self.entries_before_commit:
+            self.conn.commit()
+            self.entries_without_commit = 0
 
     def convert_from_houhou(self) -> None:
         names_date_col = ["LastUpdateDate", "CreationDate", "NextAnswerDate", "SuspensionDate"]
-        name_table = self.id_srs_db + ".SrsEntrySet"
 
         for name_col in names_date_col:
             name_iso_col = name_col + "ISO"
-            q_create_col = f"ALTER TABLE {name_table} ADD COLUMN {name_iso_col} TEXT;"
+            q_create_col = f"ALTER TABLE {self.name_srs_table} ADD COLUMN {name_iso_col} TEXT;"
             q_update_col = f"""
-                           UPDATE {name_table}
+                           UPDATE {self.name_srs_table}
                            SET {name_iso_col} = 
                                CASE 
                                    WHEN typeof({name_col}) = 'text' 

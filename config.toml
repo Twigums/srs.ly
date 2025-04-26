@@ -1,0 +1,25 @@
+# how many vocab/kanji can show up in a rotating set
+max_reviews_at_once = 10
+
+# how many times app can write to the database before having to commit
+entries_before_commit = 10
+
+# minimum threshold for fuzzy string matching (decrease for more typing mistakes)
+match_score_threshold = 90
+
+# path to sqlite databases
+# srs_db contains user data
+# full_db contains dictionary data
+path_to_srs_db = "./db/SrsDatabase.sqlite"
+path_to_full_db = "./db/KanjiDatabase.sqlite"
+
+[srs_interval]
+0 = { value = 4, unit = "hours" }
+1 = { value = 8, unit = "hours" }
+2 = { value = 1, unit = "days" }
+3 = { value = 3, unit = "days" }
+4 = { value = 7, unit = "days" }
+5 = { value = 14, unit = "days" }
+6 = { value = 30, unit = "days" }
+7 = { value = 120, unit = "days" }
+8 = -1 # stop reviewing
