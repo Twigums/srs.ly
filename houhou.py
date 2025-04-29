@@ -68,11 +68,11 @@ class SrsApp:
         failure_col = "FailureCount"
         success_col = "SuccessCount"
         q_current_grade_count = f"""
-                  SELECT 
-                      COUNT(*)
-                  FROM {self.name_srs_table}
-                  GROUP BY {current_grade_col};
-                  """
+                                SELECT 
+                                    COUNT(*)
+                                FROM {self.name_srs_table}
+                                GROUP BY {current_grade_col};
+                                """
         q_sucess_ratio = f"""
                          SELECT 
                              CASE
@@ -82,8 +82,8 @@ class SrsApp:
                          FROM srs_db.SrsEntrySet
                          """
 
-        df_counts = pd.read_sql_query(q_current_grade_count, app.conn)
-        df_ratio = pd.read_sql_query(q_sucess_ratio, app.conn)
+        df_counts = pd.read_sql_query(q_current_grade_count, self.conn)
+        df_ratio = pd.read_sql_query(q_sucess_ratio, self.conn)
 
         return df_counts, df_ratio
 

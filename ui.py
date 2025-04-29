@@ -8,6 +8,36 @@ import pandas as pd
 
 
 app = SrsApp()
+alphabet = " abcdefghijklmnopqrstuvwxyz"
+
+def load_stats(grid):
+    grid.clear()
+
+    df_counts, df_ratio = app.get_review_stats()
+    df_reviews = app.get_due_reviews()
+    values = df_counts.iloc[:, 0].tolist()
+
+    with grid:
+        ui.label("# of Reviews")
+        ui.label(len(df_reviews))
+        
+        ui.label("Discovering")
+        ui.label(values[0] + values[1])
+
+        ui.label("Committing")
+        ui.label(values[2] + values[3])
+
+        ui.label("Bolstering")
+        ui.label(values[4] + values[5])
+
+        ui.label("Assimilating")
+        ui.label(values[6] + values[7])
+
+        ui.label("Set in Stone")
+        ui.label(values[8])
+
+        ui.label("Correct %")
+        ui.label(df_ratio.values[0] * 100)
 
 @ui.page("/")
 def index():
@@ -45,11 +75,17 @@ def index():
         ui.label("SRS Tool").classes("text-h4 q-px-md")
     
     with ui.tabs().classes("w-full") as tabs:
+        main_tab = ui.tab("Main")
         review_tab = ui.tab("Review")
         add_tab = ui.tab("Add Item")
 
-    ui.label("test")
-    with ui.tab_panels(tabs).classes("w-full"):
+    with ui.tab_panels(tabs, value = main_tab).classes("w-full"):
+        with ui.tab_panel(main_tab):
+            with ui.grid(columns = 2).classes("gap-4") as main_page_grid:
+                load_stats(main_page_grid)
+    
+            ui.timer(interval = 60.0, callback = lambda: load_stats(main_page_grid))
+
         with ui.tab_panel(review_tab):
             with ui.card().classes("card-container") as review_card:
     
@@ -136,7 +172,6 @@ def index():
                 def handle_key(e: KeyEventArguments):
                     global text_buffer, kana_output
     
-                    alphabet = " abcdefghijklmnopqrstuvwxyz"
                     key = e.key
                     key_str = str(key)
     
@@ -350,21 +385,18 @@ def index():
                 selected_items = []
                 
                 def update_search_results():
-                    # Clear previous results
                     table_container.clear()
                     selection_container.clear()
                     add_button.visible = False
 
                     jlpt_condition = ",".join([str(val) for val in jlpt_levels.value])
                     
-                    # Get data based on selected type
                     if "vocab" in item_type.value:
                         condition = f"v.JlptLevel IN ({jlpt_condition})"
                         # if search_input.value:
                             # level_condition += f" AND (v.KanjiWriting LIKE '%{search_input.value}%' OR v.KanaWriting LIKE '%{search_input.value}%')"
                         df = app.discover_new_vocab(condition = condition)
                         
-                        # Create a simplified DataFrame for display
                         if not df.empty:
                             display_df = df[["KanjiWriting", "KanaWriting", "Meaning", "IsCommon", "JlptLevel", "WkLevel", "FrequencyRank", "WikiRank"]].copy()
                             display_df.columns = ["Kanji", "Readings", "Meanings", "IsCommon", "JLPT", "Wanikani", "Frequency Rank", "Wiki Rank"]
@@ -380,7 +412,6 @@ def index():
                             with table_container:
                                 ui.label(f"Found {len(display_df)} items").classes("text-h6")
                                 
-                                # Convert to table with selection
                                 with ui.element("div").classes("table-container w-full"):
                                     table = ui.table(
                                         columns = [
@@ -446,7 +477,7 @@ def index():
                                             ui.label(item["kanji"]).classes("japanese-text mr-2")
                                             ui.label(item["reading"]).classes("mr-2")
                                             ui.label(item["meaning"])
-                                        else:  # kanji
+                                        else:
                                             ui.label(item["kanji"]).classes("japanese-text mr-2")
                                             ui.label(item["meaning"])
                         
