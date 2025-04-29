@@ -18,6 +18,12 @@ class SrsApp:
         path_to_srs_db = config["path_to_srs_db"]
         path_to_full_db = config["path_to_full_db"]
 
+        # keybindings
+        self.keybinds = config["keybinds"]
+        self.key_ignore_answer = self.keybinds["ignore_answer"]
+        self.key_add_as_valid_response = self.keybinds["add_as_valid_response"]
+        self.key_quit_after_current_set = self.keybinds["quit_after_current_set"].split(",")[-1]
+
         self.id_srs_db = "srs_db"
         self.name_srs_table = self.id_srs_db + ".SrsEntrySet"
         self.entries_without_commit = 0
@@ -35,13 +41,51 @@ class SrsApp:
 
         self.cursor = self.conn.cursor()
         self.cursor.execute(f"ATTACH DATABASE '{path_to_srs_db}' AS {self.id_srs_db};")
+
+    def to_commit(self):
+        self.entries_without_commit += 1
         
+        if self.entries_without_commit >= self.entries_before_commit:
+            self.conn.commit()
+            self.entries_without_commit = 0
+
+        return None
+
+    def force_commit(self):
+        self.entries_without_commit = 0
+        self.conn.commit()
+
+        return None
         
     def close_db(self):
-
-        # commit changes
-        self.conn.commit()
+        self.force_commit()
         self.conn.close()
+
+        return None
+
+    def get_review_stats(self):
+        current_grade_col = "CurrentGrade"
+        failure_col = "FailureCount"
+        success_col = "SuccessCount"
+        q_current_grade_count = f"""
+                  SELECT 
+                      COUNT(*)
+                  FROM {self.name_srs_table}
+                  GROUP BY {current_grade_col};
+                  """
+        q_sucess_ratio = f"""
+                         SELECT 
+                             CASE
+                             WHEN (SUM({failure_col}) + SUM({success_col})) = 0 THEN 0
+                             ELSE SUM({success_col}) * 1.0 / (SUM({failure_col}) + SUM({success_col}))
+                             END AS ratio
+                         FROM srs_db.SrsEntrySet
+                         """
+
+        df_counts = pd.read_sql_query(q_current_grade_count, app.conn)
+        df_ratio = pd.read_sql_query(q_sucess_ratio, app.conn)
+
+        return df_counts, df_ratio
 
     def get_current_item(self):
         if len(self.current_reviews) == 0:
@@ -129,6 +173,8 @@ class SrsApp:
 
     def start_review_session(self):
         self.current_index = 0
+        self.end_review_early = False
+
         df = self.get_due_reviews()
         
         if df.empty:
@@ -195,7 +241,36 @@ class SrsApp:
 
         random.shuffle(self.current_reviews)
 
-    def update_item(self, item_id, res):
+        return None
+
+    def add_valid_response(self, user_input, item):
+        id_col = "ID"
+        card_type = item["card_type"]
+        item_id = item["ID"]
+
+        match card_type:
+            case "reading":
+                response_col = "Readings"
+
+            case "meaning":
+                response_col = "Meanings"
+
+        q = f"""
+            UPDATE {self.name_srs_table}
+            SET
+                {response_col} = ?
+            WHERE {id_col} = {item_id};
+            """
+
+        valid_responses = item[response_col]
+        valid_responses += f",{user_input}"
+
+        self.conn.execute(q, (valid_responses,))
+        self.to_commit()
+
+        return None
+
+    def update_review_item(self, item_id, res):
         id_col = "ID"
         q_retrieve_item = f"""
                           SELECT 
@@ -247,12 +322,10 @@ class SrsApp:
                 review_time = review_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
         self.conn.execute(q_update_item, (row["CurrentGrade"], row["FailureCount"], row["SuccessCount"], review_time))
-        self.entries_without_commit += 1
         self.current_completed += 1
-        
-        if self.entries_without_commit >= self.entries_before_commit:
-            self.conn.commit()
-            self.entries_without_commit = 0
+        self.to_commit()
+
+        return None
 
     def convert_from_houhou(self) -> None:
         names_date_col = ["LastUpdateDate", "CreationDate", "NextAnswerDate", "SuspensionDate"]
@@ -285,3 +358,4 @@ class SrsApp:
                 print(f"{name_col}: {e}")
                 continue
 
+        return None

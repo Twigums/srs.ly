@@ -5,6 +5,7 @@ max_reviews_at_once = 10
 entries_before_commit = 10
 
 # minimum threshold for fuzzy string matching (decrease for more typing mistakes)
+# from 0 - 100
 match_score_threshold = 90
 
 # path to sqlite databases
@@ -13,6 +14,9 @@ match_score_threshold = 90
 path_to_srs_db = "./db/SrsDatabase.sqlite"
 path_to_full_db = "./db/KanjiDatabase.sqlite"
 
+# srs review intervals
+# after each correct answer, the interval integer increments up 1
+# wrong answer, increment down 1
 [srs_interval]
 0 = { value = 4, unit = "hours" }
 1 = { value = 8, unit = "hours" }
@@ -23,3 +27,9 @@ path_to_full_db = "./db/KanjiDatabase.sqlite"
 6 = { value = 30, unit = "days" }
 7 = { value = 120, unit = "days" }
 8 = -1 # stop reviewing
+
+# keybindings
+[keybinds]
+ignore_answer = "Backspace"
+add_as_valid_response = "="
+quit_after_current_set = "ctrl,e"
