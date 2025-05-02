@@ -30,6 +30,7 @@ class SrsApp:
         self.current_reviews = []
         self.current_index = 0
         self.current_completed = 0
+        self.stop_updating_review = False
         self.due_review_ids = []
         self.len_review_ids = 0
 
@@ -147,7 +148,9 @@ class SrsApp:
                 )
             SELECT * FROM v_except
             JOIN VocabEntityVocabMeaning AS v_link ON v_link.VocabEntity_ID = v_except.ID
-            JOIN VocabMeaningSet AS v_meaning ON v_link.Meanings_ID = v_meaning.ID;
+            JOIN VocabMeaningSet AS v_meaning ON v_link.Meanings_ID = v_meaning.ID
+            JOIN VocabMeaningVocabCategory as v_cat_link ON v_cat_link.VocabMeaningVocabCategory_VocabCategory_ID = v_meaning.ID
+            JOIN VocabCategorySet as v_cat ON v_cat.ID = v_cat_link.Categories_ID;
             """
 
         df = pd.read_sql_query(q, self.conn)
@@ -173,7 +176,7 @@ class SrsApp:
 
     def start_review_session(self):
         self.current_index = 0
-        self.end_review_early = False
+        self.stop_updating_review = False
 
         df = self.get_due_reviews()
         
@@ -197,17 +200,20 @@ class SrsApp:
         return self.current_reviews
 
     def update_review_session(self):
-        # adds one id
-        id_col = "ID"
-        current_id = self.due_review_ids.pop()
-        q = f"""
-            SELECT * FROM {self.name_srs_table}
-            WHERE {id_col} = {current_id};
-            """
+        if not self.stop_updating_review:
+            # adds one id
+            id_col = "ID"
+            current_id = self.due_review_ids.pop()
+            q = f"""
+                SELECT * FROM {self.name_srs_table}
+                WHERE {id_col} = {current_id};
+                """
+    
+            df = pd.read_sql_query(q, self.conn)
+            item = df.to_dict("records")
+            self.add_to_review(item)
 
-        df = pd.read_sql_query(q, self.conn)
-        item = df.to_dict("records")
-        self.add_to_review(item)
+        return None
 
     def add_to_review(self, items):
         for item in items:
@@ -269,6 +275,10 @@ class SrsApp:
         self.to_commit()
 
         return None
+
+    def add_review_item(self, items):
+        for item in items:
+            pass
 
     def update_review_item(self, item_id, res):
         id_col = "ID"

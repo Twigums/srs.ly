@@ -144,8 +144,16 @@ def index():
     
                     if not current_item:
                         reading_display.text = ""
+                        res_display.text = ""
                         start_button.visible = True
-                        return
+                        review_progress.visible = False
+                        reading_display.visible = False
+                        separator.visible = False
+                        correct_reading_display.visible = False
+                        correct_meaning_display.visible = False
+                        review_card.style("background-color: #26c826")
+
+                        return None
                     
                     review_type = current_item["review_type"]
                     card_type = current_item["card_type"]
@@ -161,10 +169,10 @@ def index():
     
                     match card_type:
                         case "reading":
-                            separator.style('border-top: 0.5rem solid #393939; margin: 0.75rem 0;')
+                            separator.style("border-top: 0.5rem solid #393939; margin: 0.75rem 0;")
     
                         case "meaning":
-                            separator.style('border-top: 0.5rem solid #e4e4e4; margin: 0.75rem 0;')
+                            separator.style("border-top: 0.5rem solid #e4e4e4; margin: 0.75rem 0;")
     
                     review_progress.text = f"{app.current_completed} / {app.len_review_ids}"
                     review_progress.visible = True
@@ -257,7 +265,8 @@ def index():
                                 return
     
                             case app.key_quit_after_current_set if e.modifiers.ctrl:
-                                print("a")
+                                ui.notify("Will quit after the remaining items are completed.")
+                                app.stop_updating_review = True
                         
                             case "Backspace":
                                 if e.modifiers.ctrl:
@@ -379,7 +388,7 @@ def index():
                 table_container = ui.element("div").classes("japanese-text w-full")
                 selection_container = ui.element("div").classes("w-full mt-4")
                 
-                add_button = ui.button("Add Selected Items", color="green", on_click=lambda: add_selected_items())
+                add_button = ui.button("Add Selected Items", color = "green", on_click = lambda: add_selected_items())
                 add_button.visible = False
                 
                 selected_items = []
@@ -390,6 +399,14 @@ def index():
                     add_button.visible = False
 
                     jlpt_condition = ",".join([str(val) for val in jlpt_levels.value])
+
+                    if "kanji" in item_type.value:
+                        condition = f"k.JlptLevel IN ({jlpt_condition})"
+
+                        df = app.discover_new_kanji(condition = condition)
+
+                        if not df.empty:
+                            display_df = df[["Character", "OnYomi", "KunYomi", "Nanori", "Meaning", "JlptLevel", "WkLevel", "MostUsedRank", "NewspaperRank"]].copy()
                     
                     if "vocab" in item_type.value:
                         condition = f"v.JlptLevel IN ({jlpt_condition})"
@@ -398,8 +415,8 @@ def index():
                         df = app.discover_new_vocab(condition = condition)
                         
                         if not df.empty:
-                            display_df = df[["KanjiWriting", "KanaWriting", "Meaning", "IsCommon", "JlptLevel", "WkLevel", "FrequencyRank", "WikiRank"]].copy()
-                            display_df.columns = ["Kanji", "Readings", "Meanings", "IsCommon", "JLPT", "Wanikani", "Frequency Rank", "Wiki Rank"]
+                            display_df = df[["KanjiWriting", "KanaWriting", "Meaning", "IsCommon", "JlptLevel", "WkLevel", "FrequencyRank", "WikiRank", "ShortName"]].copy()
+                            display_df.columns = ["Kanji", "Readings", "Meanings", "IsCommon", "JLPT", "Wanikani", "Frequency Rank", "Wiki Rank", "Tags"]
                             display_df = display_df.groupby(["Kanji", "Readings"]).agg({
                                 "Meanings": lambda x: ";".join(x),
                                 "IsCommon": "min",
@@ -407,43 +424,53 @@ def index():
                                 "Wanikani": "min",
                                 "Frequency Rank": "min",
                                 "Wiki Rank": "min",
+                                "Tags": lambda x: ";".join(x),
                             }).reset_index()
-
+                            
                             with table_container:
                                 ui.label(f"Found {len(display_df)} items").classes("text-h6")
                                 
                                 with ui.element("div").classes("table-container w-full"):
+                                    editable_cols = ["Kanji", "Readings", "Meanings"]
+                                    rows = [
+                                        {
+                                            "Kanji": row["Kanji"],
+                                            "Readings": row["Readings"],
+                                            "Meanings": ",".join([meaning.strip() for meaning in row["Meanings"].split(";")]),
+                                            "IsCommon": "✅" if row["IsCommon"] else "❌",
+                                            "JLPT": f"N{row["JLPT"]}" if not pd.isna(row["JLPT"]) else "",
+                                            "Wanikani": row["Wanikani"] if not pd.isna(row["Wanikani"]) else "",
+                                            "Frequency Rank": row["Frequency Rank"] if not pd.isna(row["Frequency Rank"]) else "",
+                                            "Wiki Rank": row["Wiki Rank"] if not pd.isna(row["Wiki Rank"]) else "",
+                                            "Tags": row["Tags"] if not pd.isna(row["Tags"]) else "",
+                                            "id": i,
+                                        }
+                                        for i, row in display_df.iterrows()
+                                    ]
+
+                                    columns = [
+                                        {"name": "kanji", "label": "Kanji", "field": "Kanji", "required": True},
+                                        {"name": "readings", "label": "Readings", "field": "Readings", "required": True},
+                                        {"name": "meanings", "label": "Meanings", "field": "Meanings", "required": True},
+                                        {"name": "iscommon", "label": "Common", "field": "IsCommon", "sortable": True},
+                                        {"name": "jlpt", "label": "JLPT", "field": "JLPT", "sortable": True},
+                                        {"name": "wanikani", "label": "Wanikani", "field": "Wanikani", "sortable": True},
+                                        {"name": "freq", "label": "Freq. Rank", "field": "Frequency Rank", "sortable": True},
+                                        {"name": "wiki", "label": "Wiki Rank", "field": "Wiki Rank", "sortable": True},
+                                        {"name": "tags", "label": "Tags", "field": "Tags"},
+                                    ]
+
                                     table = ui.table(
-                                        columns = [
-                                            {"name": "kanji", "label": "Kanji", "field": "Kanji", "required": True},
-                                            {"name": "readings", "label": "Readings", "field": "Readings", "required": True},
-                                            {"name": "meanings", "label": "Meanings", "field": "Meanings", "required": True},
-                                            {"name": "iscommon", "label": "Common", "field": "IsCommon", "sortable": True},
-                                            {"name": "jlpt", "label": "JLPT", "field": "JLPT", "sortable": True},
-                                            {"name": "wanikani", "label": "Wanikani", "field": "Wanikani", "sortable": True},
-                                            {"name": "freq", "label": "Freq. Rank", "field": "Frequency Rank", "sortable": True},
-                                            {"name": "wiki", "label": "Wiki Rank", "field": "Wiki Rank", "sortable": True},
-                                        ],
-                                        rows = [
-                                            {
-                                                "Kanji": row["Kanji"],
-                                                "Readings": row["Readings"],
-                                                "Meanings": ",".join([meaning.strip() for meaning in row["Meanings"].split(";")]),
-                                                "IsCommon": "✅" if row["IsCommon"] else "❌",
-                                                "JLPT": f"N{row["JLPT"]}" if not pd.isna(row["JLPT"]) else "",
-                                                "Wanikani": row["Wanikani"] if not pd.isna(row["Wanikani"]) else "",
-                                                "Frequency Rank": row["Frequency Rank"] if not pd.isna(row["Frequency Rank"]) else "",
-                                                "Wiki Rank": row["Wiki Rank"] if not pd.isna(row["Wiki Rank"]) else "",
-                                                "id": i,
-                                            }
-                                            for i, row in display_df.iterrows()
-                                        ],
-                                        selection = "multiple",
-                                        row_key = "id",
+                                        rows = rows,
+                                        columns = columns,
                                         column_defaults = {
                                             "align": "left",
                                             "headerClasses": "uppercase text-primary",
-                                        }
+                                        },
+                                        row_key = "id",
+                                        selection = "multiple",
+                                        pagination = 100,
+                                        
                                     ).classes("w-full vocab-table")
                                 
                                 def on_selection(e):
