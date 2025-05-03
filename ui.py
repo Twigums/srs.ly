@@ -70,11 +70,14 @@ def index():
         }
     </style>
     """)
+
+    header = ui.header().classes("bg-blue-500 text-white")
+    tabs = ui.tabs().classes("w-full")
     
-    with ui.header().classes("bg-blue-500 text-white"):
+    with header:
         ui.label("SRS Tool").classes("text-h4 q-px-md")
     
-    with ui.tabs().classes("w-full") as tabs:
+    with tabs:
         main_tab = ui.tab("Main")
         review_tab = ui.tab("Review")
         add_tab = ui.tab("Add Item")
@@ -87,7 +90,9 @@ def index():
             ui.timer(interval = 60.0, callback = lambda: load_stats(main_page_grid))
 
         with ui.tab_panel(review_tab):
-            with ui.card().classes("card-container") as review_card:
+            review_card = ui.card().classes("card-container")
+
+            with review_card:
     
                 global text_buffer, kana_output
                 text_buffer = ""
@@ -103,8 +108,8 @@ def index():
                 reading_display = ui.label("").classes("japanese-main-text text-center q-py-xl text-white")
                 reading_display.visible = False
                 
-                separator = ui.separator()
-                separator.visible = False
+                review_separator = ui.separator()
+                review_separator.visible = False
                 
                 user_romaji = ui.label("").classes("text-white")
                 user_hiragana = ui.label("").classes("japanese-main-text text-white")
@@ -134,7 +139,7 @@ def index():
     
                     start_button.visible = False
                     reading_display.visible = True
-                    separator.visible = True
+                    review_separator.visible = True
     
                     update_review_display()
                     ui.keyboard(on_key = handle_key)
@@ -148,7 +153,7 @@ def index():
                         start_button.visible = True
                         review_progress.visible = False
                         reading_display.visible = False
-                        separator.visible = False
+                        review_separator.visible = False
                         correct_reading_display.visible = False
                         correct_meaning_display.visible = False
                         review_card.style("background-color: #26c826")
@@ -169,10 +174,10 @@ def index():
     
                     match card_type:
                         case "reading":
-                            separator.style("border-top: 0.5rem solid #393939; margin: 0.75rem 0;")
+                            review_separator.style("border-top: 0.5rem solid #393939; margin: 0.75rem 0;")
     
                         case "meaning":
-                            separator.style("border-top: 0.5rem solid #e4e4e4; margin: 0.75rem 0;")
+                            review_separator.style("border-top: 0.5rem solid #e4e4e4; margin: 0.75rem 0;")
     
                     review_progress.text = f"{app.current_completed} / {app.len_review_ids}"
                     review_progress.visible = True
@@ -386,7 +391,8 @@ def index():
                     search_button = ui.button("Search", color = "primary", on_click = lambda: update_search_results())
                 
                 table_container = ui.element("div").classes("japanese-text w-full")
-                selection_container = ui.element("div").classes("w-full mt-4")
+                items_separator = ui.separator()
+                input_container = ui.column()
                 
                 add_button = ui.button("Add Selected Items", color = "green", on_click = lambda: add_selected_items())
                 add_button.visible = False
@@ -395,7 +401,6 @@ def index():
                 
                 def update_search_results():
                     table_container.clear()
-                    selection_container.clear()
                     add_button.visible = False
 
                     jlpt_condition = ",".join([str(val) for val in jlpt_levels.value])
@@ -469,49 +474,33 @@ def index():
                                         },
                                         row_key = "id",
                                         selection = "multiple",
+                                        on_select = lambda e: render_inputs(e.selection),
                                         pagination = 100,
-                                        
                                     ).classes("w-full vocab-table")
-                                
-                                def on_selection(e):
-                                    nonlocal selected_items
-                                    selected_items = [
-                                        {
-                                            "type": "vocab",
-                                            "kanji": display_df.iloc[row_id]["Kanji"],
-                                            "reading": display_df.iloc[row_id]["Reading"],
-                                            "meaning": display_df.iloc[row_id]["Meaning"],
-                                            "jlpt": display_df.iloc[row_id]["JLPT"]
-                                        }
-                                        for row_id in e.selection
-                                    ]
-                                    
-                                    update_selection_display()
-                                
-                                table.on("selection", on_selection)
-                
-                def update_selection_display():
-                    selection_container.clear()
-                    
-                    if selected_items:
-                        with selection_container:
-                            ui.label(f"Selected Items ({len(selected_items)})").classes("text-h6")
-                            
-                            with ui.card().classes("bg-green-100"):
-                                for item in selected_items:
-                                    with ui.row().classes("items-center"):
-                                        if item["type"] == "vocab":
-                                            ui.label(item["kanji"]).classes("japanese-text mr-2")
-                                            ui.label(item["reading"]).classes("mr-2")
-                                            ui.label(item["meaning"])
-                                        else:
-                                            ui.label(item["kanji"]).classes("japanese-text mr-2")
-                                            ui.label(item["meaning"])
-                        
-                        add_button.visible = True
+
+                def render_inputs(selected):
+                    input_container.clear()
+
+                    match len(selected):
+                        case 0:
+                            add_button.visible = False
+                            items_separator.visible = False
+
+                        case _:
+                            add_button.visible = True
+                            items_separator.visible = True
+
+                            for item in selected:
+                                with input_container:
+                                    with ui.row():
+                                        ui.label(f"Vocab has tags: {item["Tags"]}")
+                                        ui.input("Kanji", value = item["Kanji"], on_change = lambda e: ui.notify(e.value))
+                                        ui.input("Readings", value = item["Readings"])
+                                        ui.input("Meanings", value = item["Meanings"])
                 
                 def add_selected_items():
-                    selected_items.clear()
+                    print("added")
                     update_search_results()
+                    input_container.clear()
 
 ui.run(port = 7012, title = "srs tool")
