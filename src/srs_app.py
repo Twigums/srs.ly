@@ -1,10 +1,28 @@
 import pandas as pd
-import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
 import random
 import tomllib
 
+from datetime import datetime, timedelta, timezone
+from functools import wraps
+
+
+# decorator to handle if db connection is not established
+# returns None if no connection
+def check_conn(f):
+
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        self = args[0]
+
+        if self.conn is None:
+            print(f"{f.__name__} failed. DB conn is {self.conn}.")
+
+            return None
+
+        return f(*args, **kwargs)
+
+    return wrapper
 
 class SrsApp:
     def __init__(self):
@@ -19,8 +37,8 @@ class SrsApp:
         self.entries_before_commit = config["entries_before_commit"]
         self.match_score_threshold = config["match_score_threshold"]
         self.srs_interval = config["srs_interval"]
-        path_to_srs_db = config["path_to_srs_db"]
-        path_to_full_db = config["path_to_full_db"]
+        self.path_to_srs_db = config["path_to_srs_db"]
+        self.path_to_full_db = config["path_to_full_db"]
 
         # keybindings
         self.keybinds = config["keybinds"]
@@ -31,6 +49,8 @@ class SrsApp:
         # variables shared between app and ui
         self.id_srs_db = "srs_db"
         self.name_srs_table = self.id_srs_db + ".SrsEntrySet"
+        self.conn = None
+        self.cursor = None
         self.entries_without_commit = 0
         self.current_reviews = []
         self.current_index = 0
@@ -39,21 +59,25 @@ class SrsApp:
         self.due_review_ids = []
         self.len_review_ids = 0
 
-        # initialize sql connection to db
+    # initialize sql connection to db
+    def init_db(self):
         try:
-            self.conn = sqlite3.connect(path_to_full_db)
+            self.conn = sqlite3.connect(self.path_to_full_db)
 
         except Exception:
             raise Exception
 
         self.cursor = self.conn.cursor()
-        self.cursor.execute(f"ATTACH DATABASE '{path_to_srs_db}' AS {self.id_srs_db};")
+        self.cursor.execute(f"ATTACH DATABASE '{self.path_to_srs_db}' AS {self.id_srs_db};")
+
+        return None
 
     # buffer for committing
     # prevents many commits at the same time
+    @check_conn
     def to_commit(self):
         self.entries_without_commit += 1
-        
+
         if self.entries_without_commit >= self.entries_before_commit:
             self.conn.commit()
             self.entries_without_commit = 0
@@ -61,6 +85,7 @@ class SrsApp:
         return None
 
     # reset # of entries without commit, and then commit
+    @check_conn
     def force_commit(self):
         self.entries_without_commit = 0
         self.conn.commit()
@@ -68,13 +93,18 @@ class SrsApp:
         return None
 
     # close db by commiting all changes then closing the connection
+    @check_conn
     def close_db(self):
         self.force_commit()
         self.conn.close()
 
+        self.conn = None
+        self.cursor = None
+
         return None
 
     # retrieve counts and ratio from db
+    @check_conn
     def get_review_stats(self):
         current_grade_col = "CurrentGrade"
         failure_col = "FailureCount"
@@ -100,6 +130,7 @@ class SrsApp:
         return df_counts, df_ratio
 
     # returns info on current item
+    @check_conn
     def get_current_item(self):
         if len(self.current_reviews) == 0:
             return None
@@ -111,23 +142,25 @@ class SrsApp:
 
     # returns df on review items that have their next review date timestamp less than the current time
     # that means that item is ready for review
+    @check_conn
     def get_due_reviews(self) -> pd.core.frame.DataFrame:
         date_col = "NextAnswerDateISO"
         q = f"""
             SELECT * FROM {self.name_srs_table}
             WHERE {date_col} < current_timestamp;
             """
-        
+
         df = pd.read_sql_query(q, self.conn)
         return df
 
     # returns df of all vocabs present in the user's srs review
+    @check_conn
     def get_study_vocab(self) -> set:
         vocab_col = "AssociatedVocab"
         q = f"""
             SELECT {vocab_col} FROM {self.name_srs_table};
             """
-    
+
         df = pd.read_sql_query(q, self.conn)
 
         all_vocabs = set(df[vocab_col].dropna())
@@ -136,6 +169,7 @@ class SrsApp:
     # returns df of all kanji present in the user's srs review
     # this is a set of both their vocab and kanji
     # i should also blacklist all the hiragana and katakana, but it is what it is
+    @check_conn
     def get_study_kanji(self) -> set:
         vocab_col, kanji_col = ("AssociatedVocab", "AssociatedKanji")
         q = f"""
@@ -143,17 +177,18 @@ class SrsApp:
             WHERE LENGTH({vocab_col}) = 1
             OR LENGTH({kanji_col}) = 1;
             """
-    
+
         df = pd.read_sql_query(q, self.conn)
-    
+
         vocab_kanjis = set(df[vocab_col].dropna())
         kanji_kanjis = set(df[kanji_col].dropna())
-    
+
         all_kanjis = vocab_kanjis.union(kanji_kanjis)
         return all_kanjis
 
     # returns df of vocab that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
+    @check_conn
     def discover_new_vocab(self, condition: str = "v.JlptLevel IN (1, 2, 3, 4, 5)") -> pd.core.frame.DataFrame:
         vocab_col = "AssociatedVocab"
         q = f"""
@@ -177,6 +212,7 @@ class SrsApp:
 
     # returns df of kanji that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
+    @check_conn
     def discover_new_kanji(self, condition: str = "k.JpltLevel IN (1, 2, 3, 4, 5)") -> pd.core.frame.DataFrame:
         kanji_col = "AssociatedKanji"
         q = f"""
@@ -196,13 +232,14 @@ class SrsApp:
         return df
 
     # initialize the review session
+    @check_conn
     def start_review_session(self):
         self.current_index = 0
         self.stop_updating_review = False
 
         # get due reviews
         df = self.get_due_reviews()
-        
+
         if df.empty:
             return []
 
@@ -217,14 +254,15 @@ class SrsApp:
         while len(current_ids) < len(sorted_df) and len(current_ids) < self.max_reviews_at_once:
             current_id = self.due_review_ids.pop()
             current_ids.add(current_id)
-        
+
         current_df = sorted_df[sorted_df["ID"].isin(current_ids)]
         items = current_df.to_dict("records")
         self.add_to_review(items)
-        
+
         return self.current_reviews
 
     # if the user has not designated to stop reviewing, get another item and add it to the review list
+    @check_conn
     def update_review_session(self):
         if not self.stop_updating_review:
 
@@ -243,6 +281,7 @@ class SrsApp:
         return None
 
     # defines an item and adds it to the review list
+    @check_conn
     def add_to_review(self, items):
         for item in items:
             review_type = None
@@ -267,7 +306,7 @@ class SrsApp:
             reading_card["prompt"] = current_item
             reading_card["expected_answer"] = reading_card["Readings"]
             self.current_reviews.append(reading_card)
-            
+
             meaning_card = item.copy()
             meaning_card["review_type"] = review_type
             meaning_card["card_type"] = "meaning"
@@ -280,6 +319,7 @@ class SrsApp:
         return None
 
     # adds another valid meaning to the item in the db
+    @check_conn
     def add_valid_response(self, user_input, item):
         id_col = "ID"
         card_type = item["card_type"]
@@ -308,6 +348,7 @@ class SrsApp:
         return None
 
     # adds an item from the vocab/kanji db to the srs review db
+    @check_conn
     def add_review_item(self, item):
         q = f"""
             INSERT INTO {self.name_srs_table} (Meanings, Readings, CurrentGrade, FailureCount, SuccessCount, AssociatedVocab, AssociatedKanji, MeaningNote, ReadingNote, Tags, IsDeleted, ServerId, LastUpdateDateISO, CreationDateISO, NextAnswerDateISO)
@@ -350,6 +391,7 @@ class SrsApp:
         return None
 
     # after an answer has been processed, edit the item's status in the db
+    @check_conn
     def update_review_item(self, item_id, res):
         id_col = "ID"
         q_retrieve_item = f"""
@@ -414,6 +456,7 @@ class SrsApp:
 
     # function to convert db from houhou
     # specifically, this just adds similar columns representing time but in iso format for readability
+    @check_conn
     def convert_from_houhou(self) -> None:
         names_date_col = ["LastUpdateDate", "CreationDate", "NextAnswerDate", "SuspensionDate"]
 
