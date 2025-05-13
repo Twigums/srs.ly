@@ -87,7 +87,6 @@ def index():
         # options tab
         with ui.tab_panel(options_tab):
             options_tab_content(srs_app)
-            
 
 # start serving the site
 ui.run(port = ui_port, title = ui_web_title)
