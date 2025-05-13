@@ -338,6 +338,9 @@ def review_tab_content(srs_app):
             # if so, then we should update the review item
             # if the user gets both correct on the first try, the list would look like [1, 1]
             # if they can't something wrong: [..., 1, ..., 1], where ... may be any length of 0s
+            # a faster solution is storing a tuple (a, b)
+            # if a = 2, then the user has completed both reviews
+            # b is a counter for how many tries the user has taken
             if sum(item_dict[item_id]) == 2:
                 if len(item_dict[item_id]) == 2:
                     srs_app.update_review_item(item_id, True)
