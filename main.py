@@ -82,6 +82,10 @@ def index():
         # add items tab
         with ui.tab_panel(add_tab):
             add_tab_content(srs_app)
+
+        # options tab
+        with ui.tab_panel(options_tab):
+            options_tab_content()
             
 
 # start serving the site
