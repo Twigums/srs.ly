@@ -61,6 +61,9 @@ class SrsApp:
 
     # initialize sql connection to db
     def init_db(self):
+
+        # i have thought about having two connections, but there are a few cross database queries that need to be run
+        # i guess another solution can be retrieving 2 tables using pd and operating on them using pd
         try:
             self.conn = sqlite3.connect(self.path_to_full_db)
 
@@ -109,12 +112,20 @@ class SrsApp:
         current_grade_col = "CurrentGrade"
         failure_col = "FailureCount"
         success_col = "SuccessCount"
+        date_col = "NextAnswerDateISO"
+
         q_current_grade_count = f"""
                                 SELECT 
                                     COUNT(*)
                                 FROM {self.name_srs_table}
                                 GROUP BY {current_grade_col};
                                 """
+
+        q_today_review_count = f"""
+                               SELECT COUNT(*) FROM {self.name_srs_table}
+                               WHERE {date_col} < datetime('now', 'localtime', 'start of day', '+1 day', 'utc');
+                               """
+
         q_sucess_ratio = f"""
                          SELECT 
                              CASE
@@ -124,10 +135,11 @@ class SrsApp:
                          FROM srs_db.SrsEntrySet
                          """
 
-        df_counts = pd.read_sql_query(q_current_grade_count, self.conn)
+        df_grade_counts = pd.read_sql_query(q_current_grade_count, self.conn)
+        df_today_counts = pd.read_sql_query(q_today_review_count, self.conn)
         df_ratio = pd.read_sql_query(q_sucess_ratio, self.conn)
 
-        return df_counts, df_ratio
+        return df_grade_counts, df_today_counts, df_ratio
 
     # returns info on current item
     @check_conn
@@ -264,6 +276,11 @@ class SrsApp:
     # if the user has not designated to stop reviewing, get another item and add it to the review list
     @check_conn
     def update_review_session(self):
+
+        # stop we have already added all review items into our list, so we can stop updating review
+        if len(self.due_review_ids) == 0:
+            self.stop_updating_review = True
+
         if not self.stop_updating_review:
 
             # adds one id
@@ -462,7 +479,7 @@ class SrsApp:
 
         for name_col in names_date_col:
             name_iso_col = name_col + "ISO"
-            q_create_col = f"ALTER TABLE {self.name_srs_table} ADD COLUMN {name_iso_col} TEXT DEFAULT current_timestamp);"
+            q_create_col = f"ALTER TABLE {self.name_srs_table} ADD COLUMN {name_iso_col} TEXT;"
             q_update_col = f"""
                            UPDATE {self.name_srs_table}
                            SET {name_iso_col} = 

@@ -1,4 +1,6 @@
-from nicegui import ui
+import asyncio
+
+from nicegui import background_tasks, ui
 
 from src.srs_app import SrsApp
 from src.nicegui.main_tab import main_tab_content
@@ -73,7 +75,6 @@ def index():
         # we should show stats and refresh it automatically!
         with ui.tab_panel(main_tab):
             main_tab_content(srs_app)
-            
 
         # srs review tab to show review cards one by one
         with ui.tab_panel(review_tab):
@@ -85,8 +86,7 @@ def index():
 
         # options tab
         with ui.tab_panel(options_tab):
-            options_tab_content()
-            
+            options_tab_content(srs_app)
 
 # start serving the site
 ui.run(port = ui_port, title = ui_web_title)
