@@ -114,11 +114,19 @@ class SrsApp:
         success_col = "SuccessCount"
         date_col = "NextAnswerDateISO"
 
+        max_srs_grade = max(int(x) for x in self.srs_interval.keys())
+
         q_current_grade_count = f"""
-                                SELECT 
-                                    COUNT(*)
-                                FROM {self.name_srs_table}
-                                GROUP BY {current_grade_col};
+                                WITH expected(val) AS (
+                                    {"\n".join([f"SELECT {i} UNION ALL" for i in range(max_srs_grade)])}
+                                    SELECT {max_srs_grade}
+                                )
+                                SELECT expected.val AS val,
+                                    COUNT(srs.{current_grade_col})
+                                FROM expected
+                                LEFT JOIN {self.name_srs_table} AS srs ON srs.{current_grade_col} = expected.val
+                                GROUP BY expected.val
+                                ORDER BY expected.val;
                                 """
 
         q_today_review_count = f"""
@@ -247,6 +255,7 @@ class SrsApp:
     @check_conn
     def start_review_session(self):
         self.current_index = 0
+        self.current_completed = 0
         self.stop_updating_review = False
 
         # get due reviews
@@ -368,8 +377,8 @@ class SrsApp:
     @check_conn
     def add_review_item(self, item):
         q = f"""
-            INSERT INTO {self.name_srs_table} (Meanings, Readings, CurrentGrade, FailureCount, SuccessCount, AssociatedVocab, AssociatedKanji, MeaningNote, ReadingNote, Tags, IsDeleted, ServerId, LastUpdateDateISO, CreationDateISO, NextAnswerDateISO)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO {self.name_srs_table} (Meanings, Readings, CurrentGrade, FailureCount, SuccessCount, AssociatedVocab, AssociatedKanji, MeaningNote, ReadingNote, Tags, IsDeleted, LastUpdateDateISO, CreationDateISO, NextAnswerDateISO)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
 
         # utc current timestamp
@@ -389,7 +398,6 @@ class SrsApp:
         reading_note = item["reading_note"].value
         tags = None
         is_deleted = 0
-        server_id = None
         last_update_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
         creation_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
         next_answer_date = next_answer_datetime.strftime("%Y-%m-%d %H:%M:%S")
@@ -402,7 +410,7 @@ class SrsApp:
                 associated_kanji = item["kanji"].value
 
         # big tuple...
-        self.conn.execute(q, (meanings, readings, current_grade, failure_count, success_count, associated_vocab, associated_kanji, meaning_note, reading_note, tags, is_deleted, server_id, last_update_date, creation_date, next_answer_date))
+        self.conn.execute(q, (meanings, readings, current_grade, failure_count, success_count, associated_vocab, associated_kanji, meaning_note, reading_note, tags, is_deleted, last_update_date, creation_date, next_answer_date))
         self.conn.commit()
 
         return None

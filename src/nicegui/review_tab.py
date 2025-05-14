@@ -7,14 +7,18 @@ from rapidfuzz import process
 
 
 # define the proper alphabet for review entry
-alphabet = " abcdefghijklmnopqrstuvwxyz"
+alphabet = " abcdefghijklmnopqrstuvwxyz0123456789!?-"
 
 # define a few global variables
 correct_message = "✅"
 incorrect_message = "❌"
 
+# buffer for review text entry
 text_buffer = ""
 kana_output = ""
+
+# only enable keyboard input if this is False, otherwise we have a keyboard instance active already
+keyboard_active = False
 
 def review_tab_content(srs_app):
     review_card = ui.card().classes("card-container")
@@ -70,7 +74,10 @@ def review_tab_content(srs_app):
                     update_review_display()
 
                     # keyboard to allow typing using our specified keys/keybinds
-                    ui.keyboard(on_key = handle_key)
+                    global keyboard_active
+                    if not keyboard_active:
+                        ui.keyboard(on_key = handle_key)
+                        keyboard_active = True
 
         # update the review display after each card
         def update_review_display():
