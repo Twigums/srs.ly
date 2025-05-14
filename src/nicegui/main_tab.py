@@ -15,10 +15,15 @@ def load_stats(srs_app, grid):
         return None
 
     df_reviews = srs_app.get_due_reviews()
-    grade_values = df_grade_counts.iloc[:, 0].tolist()
+    grade_values = df_grade_counts.iloc[:, -1].tolist()
 
     # i will use the houhou definition (similar to wanikani)
     with grid:
+        if grade_values == []:
+            ui.notify("Start adding items and reviewing to see stats!")
+
+            return None
+
         ui.label("# of Reviews Due")
         ui.label(f"{len(df_reviews)} / {df_today_counts.values[0][0]}")
 
