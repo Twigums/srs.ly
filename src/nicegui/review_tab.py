@@ -321,8 +321,9 @@ def review_tab_content(srs_app):
 
                     for reading in valid_readings:
                         reading_stripped = reading.strip()
-                        remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_stripped)
-                        strip_parentheses = re.sub(r"[()]", "", reading_stripped)
+                        reading_lower = reading_stripped.lower()
+                        remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_lower)
+                        strip_parentheses = re.sub(r"[()]", "", reading_lower)
 
                         lookup_readings[strip_parentheses] = reading
                         lookup_readings[remove_all_in_parentheses] = reading
