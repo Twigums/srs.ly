@@ -6,12 +6,12 @@ entries_before_commit = 10
 
 # minimum threshold for fuzzy string matching (decrease for more typing mistakes)
 # from 0 - 100
-match_score_threshold = 87
+match_score_threshold = 85
 
 # path to sqlite databases
 # srs_db contains user data
 # full_db contains dictionary data
-path_to_srs_db = "./db/empty_test.db"
+path_to_srs_db = "./db/SrsDatabase.sqlite"
 path_to_full_db = "./db/KanjiDatabase.sqlite"
 
 # srs review intervals

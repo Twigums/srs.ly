@@ -3,7 +3,7 @@ import re
 from nicegui import ui
 from nicegui.events import KeyEventArguments
 from pyokaka import okaka # maybe consider romkan?
-from rapidfuzz import process
+from rapidfuzz import process, fuzz
 
 
 # define the proper alphabet for review entry
@@ -246,7 +246,15 @@ def review_tab_content(srs_app):
                             text_buffer = " ".join(text_buffer.split(" ")[:-1])
 
                         else:
-                            text_buffer = text_buffer[:-1]
+                            match card_type:
+                                case "reading":
+                                    current_length = len(kana_output)
+
+                                    while len(okaka.convert(text_buffer)) == current_length and current_length > 0:
+                                        text_buffer = text_buffer[:-1]
+
+                                case "meaning":
+                                    text_buffer = text_buffer[:-1]
 
                     # pyokaka's greedy algoirthm requires this roundabout
                     case "n" if text_buffer.endswith("n"):
@@ -328,7 +336,7 @@ def review_tab_content(srs_app):
                         lookup_readings[remove_all_in_parentheses] = reading
 
                     all_valid_readings = list(lookup_readings.keys())
-                    matching_reading, matching_score, _ = process.extractOne(answer_stripped, all_valid_readings)
+                    matching_reading, matching_score, _ = process.extractOne(answer_stripped, all_valid_readings, scorer = fuzz.QRatio)
 
             # if the score is over a certain threshold, then we mark it as correct
             # otherwise, it's incorrect
