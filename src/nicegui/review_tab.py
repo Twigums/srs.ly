@@ -321,9 +321,54 @@ class ReviewTab(ui.element):
 
                 all_valid_readings = list(lookup_readings.keys())
 
+<<<<<<< HEAD
                 if answer_stripped in all_valid_readings:
                     matching_score = 100
                     matching_reading = answer_stripped
+=======
+                    else:
+                        matching_score = 0
+
+                # use fuzzy matching to score meanings
+                case "meaning":
+                    valid_readings = item["Meanings"].split(",")
+                    correct_meaning_display.text = str(valid_readings)
+                    correct_meaning_display.visible = True
+                    correct_reading_display.visible = False
+
+                    for reading in valid_readings:
+                        reading_stripped = reading.strip()
+                        reading_lower = reading_stripped.lower()
+                        remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_lower)
+                        strip_parentheses = re.sub(r"[()]", "", reading_lower)
+
+                        lookup_readings[strip_parentheses] = reading
+                        lookup_readings[remove_all_in_parentheses] = reading
+
+                    all_valid_readings = list(lookup_readings.keys())
+                    matching_reading, matching_score, _ = process.extractOne(answer_stripped, all_valid_readings, scorer = fuzz.QRatio)
+
+            # if the score is over a certain threshold, then we mark it as correct
+            # otherwise, it's incorrect
+            if matching_score > srs_app.match_score_threshold:
+                item_dict[item_id].append(1)
+                res_display.text = correct_message
+                srs_app.current_reviews.pop(srs_app.current_index)
+
+            else:
+                item_dict[item_id].append(0)
+                res_display.text = incorrect_message
+
+            # my way of marking if both the reading and meaning cards are marked as correct
+            # if so, then we should update the review item
+            # if the user gets both correct on the first try, the list would look like [1, 1]
+            # if they can't something wrong: [..., 1, ..., 1], where ... may be any length of 0s
+            # a faster solution is storing a tuple (a, b)
+            # if a = 2, then the user has completed both reviews
+            # b is a counter for how many tries the user has taken
+            if sum(item_dict[item_id]) == 2:
+                if len(item_dict[item_id]) == 2:
+                    srs_app.update_review_item(item_id, True)
 
                 else:
                     matching_score = 0
@@ -334,8 +379,9 @@ class ReviewTab(ui.element):
 
                 for reading in valid_readings:
                     reading_stripped = reading.strip()
-                    remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_stripped)
-                    strip_parentheses = re.sub(r"[()]", "", reading_stripped)
+                    reading_lower = reading_stripped.lower()
+                    remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_lower)
+                    strip_parentheses = re.sub(r"[()]", "", reading_lower)
 
                     lookup_readings[strip_parentheses] = reading
                     lookup_readings[remove_all_in_parentheses] = reading
