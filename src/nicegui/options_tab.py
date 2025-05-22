@@ -1,19 +1,23 @@
 from nicegui import ui
+from nicegui.events import ValueChangeEventArguments
 
 
-def options_tab_content(srs_app):
-    ui.switch("DB Status", value = True, on_change = lambda e: set_db_status(e))
+class OptionsTab(ui.element):
+    def __init__(self, srs_app):
+        self.srs_app = srs_app
+
+        self.db_switch = ui.switch("DB Status", value = True, on_change = lambda e: self.set_db_status(e))
+        
+        # set up how the dark mode button looks
+        dark = ui.dark_mode()
+        self.dark_switch = ui.switch("Dark Mode").bind_value(dark)
     
-    # set up how the dark mode button looks
-    dark = ui.dark_mode()
-    dark_switch = ui.switch("Dark Mode").bind_value(dark)
-
     # turns on/off backend db depending on switch status
-    def set_db_status(e):
+    def set_db_status(self, e: ValueChangeEventArguments):
         if e.value:
-            srs_app.init_db()
+            self.srs_app.init_db()
             ui.notify("Connected to DB!")
     
         else:
-            srs_app.close_db()
+            self.srs_app.close_db()
             ui.notify("Closed DB!")

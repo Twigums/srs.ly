@@ -1,12 +1,10 @@
-import asyncio
-
-from nicegui import background_tasks, ui
+from nicegui import ui, app
 
 from src.srs_app import SrsApp
-from src.nicegui.main_tab import main_tab_content
-from src.nicegui.review_tab import review_tab_content
-from src.nicegui.add_tab import add_tab_content
-from src.nicegui.options_tab import options_tab_content
+from src.nicegui.main_tab import MainTab
+from src.nicegui.review_tab import ReviewTab
+from src.nicegui.add_tab import AddTab
+from src.nicegui.options_tab import OptionsTab
 
 
 # initialize the app
@@ -21,9 +19,25 @@ key_ignore_answer = srs_app.keybinds["ignore_answer"]
 key_add_as_valid_response = srs_app.keybinds["add_as_valid_response"]
 key_quit_after_current_set = srs_app.keybinds["quit_after_current_set"].split(",")[-1]
 
+# check if user is using mobile or not
+is_mobile = False
+
+app.on_connect(lambda: check_device())
+
+def check_device() -> None:
+    res = ui.context.client.request.headers["user-agent"]
+
+    if "Mobile" in res:
+        global is_mobile
+        is_mobile = True
+
+    print(f"Connected from: {res}")
+
+    return None
+
 # main website function
 @ui.page("/")
-def index():
+def index() -> None:
     ui.add_head_html("<link href='https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap' rel='stylesheet'>")
     ui.add_head_html("""
     <style>
@@ -74,19 +88,21 @@ def index():
         # definitions for the main tab
         # we should show stats and refresh it automatically!
         with ui.tab_panel(main_tab):
-            main_tab_content(srs_app)
+            MainTab(srs_app)
 
         # srs review tab to show review cards one by one
         with ui.tab_panel(review_tab):
-            review_tab_content(srs_app)
+            ReviewTab(srs_app)
 
         # add items tab
         with ui.tab_panel(add_tab):
-            add_tab_content(srs_app)
+            AddTab(srs_app)
 
         # options tab
         with ui.tab_panel(options_tab):
-            options_tab_content(srs_app)
+            OptionsTab(srs_app)
+
+    return None
 
 # start serving the site
 ui.run(port = ui_port, title = ui_web_title)

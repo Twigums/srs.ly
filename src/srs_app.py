@@ -5,6 +5,7 @@ import tomllib
 
 from datetime import datetime, timedelta, timezone
 from functools import wraps
+from pandas.core.frame import DataFrame
 
 
 # decorator to handle if db connection is not established
@@ -60,7 +61,7 @@ class SrsApp:
         self.len_review_ids = 0
 
     # initialize sql connection to db
-    def init_db(self):
+    def init_db(self) -> bool:
 
         # i have thought about having two connections, but there are a few cross database queries that need to be run
         # i guess another solution can be retrieving 2 tables using pd and operating on them using pd
@@ -73,12 +74,12 @@ class SrsApp:
         self.cursor = self.conn.cursor()
         self.cursor.execute(f"ATTACH DATABASE '{self.path_to_srs_db}' AS {self.id_srs_db};")
 
-        return None
+        return True
 
     # buffer for committing
     # prevents many commits at the same time
     @check_conn
-    def to_commit(self):
+    def to_commit(self) -> None:
         self.entries_without_commit += 1
 
         if self.entries_without_commit >= self.entries_before_commit:
@@ -89,7 +90,7 @@ class SrsApp:
 
     # reset # of entries without commit, and then commit
     @check_conn
-    def force_commit(self):
+    def force_commit(self) -> None:
         self.entries_without_commit = 0
         self.conn.commit()
 
@@ -97,7 +98,7 @@ class SrsApp:
 
     # close db by commiting all changes then closing the connection
     @check_conn
-    def close_db(self):
+    def close_db(self) -> None:
         self.force_commit()
         self.conn.close()
 
@@ -108,7 +109,7 @@ class SrsApp:
 
     # retrieve counts and ratio from db
     @check_conn
-    def get_review_stats(self):
+    def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame]:
         current_grade_col = "CurrentGrade"
         failure_col = "FailureCount"
         success_col = "SuccessCount"
@@ -151,7 +152,7 @@ class SrsApp:
 
     # returns info on current item
     @check_conn
-    def get_current_item(self):
+    def get_current_item(self) -> dict:
         if len(self.current_reviews) == 0:
             return None
 
@@ -163,7 +164,7 @@ class SrsApp:
     # returns df on review items that have their next review date timestamp less than the current time
     # that means that item is ready for review
     @check_conn
-    def get_due_reviews(self) -> pd.core.frame.DataFrame:
+    def get_due_reviews(self) -> DataFrame:
         date_col = "NextAnswerDateISO"
         q = f"""
             SELECT * FROM {self.name_srs_table}
@@ -184,6 +185,7 @@ class SrsApp:
         df = pd.read_sql_query(q, self.conn)
 
         all_vocabs = set(df[vocab_col].dropna())
+
         return all_vocabs
 
     # returns df of all kanji present in the user's srs review
@@ -204,12 +206,13 @@ class SrsApp:
         kanji_kanjis = set(df[kanji_col].dropna())
 
         all_kanjis = vocab_kanjis.union(kanji_kanjis)
+
         return all_kanjis
 
     # returns df of vocab that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
     @check_conn
-    def discover_new_vocab(self, condition: str = "v.JlptLevel IN (1, 2, 3, 4, 5)") -> pd.core.frame.DataFrame:
+    def discover_new_vocab(self, condition: str = "v.JlptLevel IN (1, 2, 3, 4, 5)") -> DataFrame:
         vocab_col = "AssociatedVocab"
         q = f"""
             WITH v_except AS (
@@ -233,7 +236,7 @@ class SrsApp:
     # returns df of kanji that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
     @check_conn
-    def discover_new_kanji(self, condition: str = "k.JpltLevel IN (1, 2, 3, 4, 5)") -> pd.core.frame.DataFrame:
+    def discover_new_kanji(self, condition: str = "k.JpltLevel IN (1, 2, 3, 4, 5)") -> DataFrame:
         kanji_col = "AssociatedKanji"
         q = f"""
             WITH k_except AS (
@@ -253,7 +256,7 @@ class SrsApp:
 
     # initialize the review session
     @check_conn
-    def start_review_session(self):
+    def start_review_session(self) -> list:
         self.current_index = 0
         self.current_completed = 0
         self.stop_updating_review = False
@@ -284,7 +287,7 @@ class SrsApp:
 
     # if the user has not designated to stop reviewing, get another item and add it to the review list
     @check_conn
-    def update_review_session(self):
+    def update_review_session(self) -> None:
 
         # stop we have already added all review items into our list, so we can stop updating review
         if len(self.due_review_ids) == 0:
@@ -308,7 +311,7 @@ class SrsApp:
 
     # defines an item and adds it to the review list
     @check_conn
-    def add_to_review(self, items):
+    def add_to_review(self, items: list) -> None:
         for item in items:
             review_type = None
             current_item = None
@@ -346,7 +349,7 @@ class SrsApp:
 
     # adds another valid meaning to the item in the db
     @check_conn
-    def add_valid_response(self, user_input, item):
+    def add_valid_response(self, user_input: str, item: dict) -> None:
         id_col = "ID"
         card_type = item["card_type"]
         item_id = item["ID"]
@@ -375,7 +378,7 @@ class SrsApp:
 
     # adds an item from the vocab/kanji db to the srs review db
     @check_conn
-    def add_review_item(self, item):
+    def add_review_item(self, item: dict) -> None:
         q = f"""
             INSERT INTO {self.name_srs_table} (Meanings, Readings, CurrentGrade, FailureCount, SuccessCount, AssociatedVocab, AssociatedKanji, MeaningNote, ReadingNote, Tags, IsDeleted, LastUpdateDateISO, CreationDateISO, NextAnswerDateISO)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -417,7 +420,7 @@ class SrsApp:
 
     # after an answer has been processed, edit the item's status in the db
     @check_conn
-    def update_review_item(self, item_id, res):
+    def update_review_item(self, item_id: str, res: bool):
         id_col = "ID"
         q_retrieve_item = f"""
                           SELECT 
