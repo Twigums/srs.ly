@@ -105,4 +105,15 @@ def index() -> None:
     return None
 
 # start serving the site
-ui.run(port = ui_port, title = ui_web_title)
+if __name__ in {"__main__", "__mp_main__"}:
+    import sys
+
+    if len(sys.argv) == 2:
+
+        # for the sake of testing, i want to be able to just host the website on whatever port
+        open_port = int(sys.argv[1])
+
+    else:
+        open_port = ui_port
+
+    ui.run(port = open_port, title = ui_web_title)

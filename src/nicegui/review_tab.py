@@ -11,7 +11,7 @@ class ReviewTab(ui.element):
         self.srs_app = srs_app
 
         # define the proper alphabet for review entry
-        self.alphabet = " abcdefghijklmnopqrstuvwxyz0123456789!?-"
+        self.alphabet = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?-"
         
         # define a few global variables
         self.correct_message = "✅"
@@ -302,68 +302,69 @@ class ReviewTab(ui.element):
         card_type = self.current_item["card_type"]
 
         answer_stripped = answer.strip()
+        answer_lower = answer_stripped.lower()
         lookup_readings = dict()
 
         # keep track of progress for all items using a dictionary
         if item_id not in self.item_dict:
             self.item_dict[item_id] = []
 
-            # retrieve all valid readings and compare the typed answer to the valid readings
-            match card_type:
+        # retrieve all valid readings and compare the typed answer to the valid readings
+        match card_type:
 
-                # reading cards should be strict, since a mistype of kana usually means a different word
-                case "reading":
-                    valid_readings = self.current_item["Readings"].split(",")
-                    self.correct_reading_display.text = str(valid_readings)
-                    self.correct_reading_display.visible = True
-                    self.correct_meaning_display.visible = False
+            # reading cards should be strict, since a mistype of kana usually means a different word
+            case "reading":
+                valid_readings = self.current_item["Readings"].split(",")
+                self.correct_reading_display.text = str(valid_readings)
+                self.correct_reading_display.visible = True
+                self.correct_meaning_display.visible = False
 
-                    for reading in valid_readings:
-                        reading_stripped = reading.strip()
-                        lookup_readings[reading_stripped] = reading
+                for reading in valid_readings:
+                    reading_stripped = reading.strip()
+                    lookup_readings[reading_stripped] = reading
 
-                    all_valid_readings = list(lookup_readings.keys())
+                all_valid_readings = list(lookup_readings.keys())
 
-                    if answer_stripped in all_valid_readings:
-                        matching_score = 100
-                        matching_reading = answer_stripped
+                if answer_stripped in all_valid_readings:
+                    matching_score = 100
+                    matching_reading = answer_stripped
 
-                    else:
-                        matching_score = 0
+                else:
+                    matching_score = 0
 
-                # use fuzzy matching to score meanings
-                case "meaning":
-                    valid_readings = self.current_item["Meanings"].split(",")
-                    self.correct_meaning_display.text = str(valid_readings)
-                    self.correct_meaning_display.visible = True
-                    self.correct_reading_display.visible = False
+            # use fuzzy matching to score meanings
+            case "meaning":
+                valid_readings = self.current_item["Meanings"].split(",")
+                self.correct_meaning_display.text = str(valid_readings)
+                self.correct_meaning_display.visible = True
+                self.correct_reading_display.visible = False
 
-                    for reading in valid_readings:
-                        reading_stripped = reading.strip()
-                        reading_lower = reading_stripped.lower()
-                        remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_lower)
-                        strip_parentheses = re.sub(r"[()]", "", reading_lower)
+                for reading in valid_readings:
+                    reading_stripped = reading.strip()
+                    reading_lower = reading_stripped.lower()
+                    remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_lower)
+                    strip_parentheses = re.sub(r"[()]", "", reading_lower)
 
-                        lookup_readings[strip_parentheses] = reading
-                        lookup_readings[remove_all_in_parentheses] = reading
+                    lookup_readings[strip_parentheses] = reading
+                    lookup_readings[remove_all_in_parentheses] = reading
 
-                    all_valid_readings = list(lookup_readings.keys())
-                    matching_reading, matching_score, _ = process.extractOne(answer_stripped, all_valid_readings, scorer = fuzz.QRatio)
+                all_valid_readings = list(lookup_readings.keys())
+                matching_reading, matching_score, _ = process.extractOne(answer_lower, all_valid_readings, scorer = fuzz.QRatio)
 
-            self.correct_reading_display.text = str(valid_readings)
-            self.correct_reading_display.visible = True
-            self.correct_meaning_display.visible = False
+        self.correct_reading_display.text = str(valid_readings)
+        self.correct_reading_display.visible = True
+        self.correct_meaning_display.visible = False
 
-            # if the score is over a certain threshold, then we mark it as correct
-            # otherwise, it's incorrect
-            if matching_score > self.srs_app.match_score_threshold:
-                self.item_dict[item_id].append(1)
-                self.res_display.text = self.correct_message
-                self.srs_app.current_reviews.pop(self.srs_app.current_index)
-    
-            else:
-                self.item_dict[item_id].append(0)
-                self.res_display.text = self.incorrect_message
+        # if the score is over a certain threshold, then we mark it as correct
+        # otherwise, it's incorrect
+        if matching_score > self.srs_app.match_score_threshold:
+            self.item_dict[item_id].append(1)
+            self.res_display.text = self.correct_message
+            self.srs_app.current_reviews.pop(self.srs_app.current_index)
+
+        else:
+            self.item_dict[item_id].append(0)
+            self.res_display.text = self.incorrect_message
 
         # my way of marking if both the reading and meaning cards are marked as correct
         # if so, then we should update the review item

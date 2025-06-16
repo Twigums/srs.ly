@@ -130,9 +130,10 @@ class SrsApp:
                                 ORDER BY expected.val;
                                 """
 
+        # local time "today"
         q_today_review_count = f"""
                                SELECT COUNT(*) FROM {self.name_srs_table}
-                               WHERE {date_col} < datetime('now', 'localtime', 'start of day', '+1 day', 'utc');
+                               WHERE {date_col} < datetime('now', 'localtime', 'start of day', '+1 day', '-1 second');
                                """
 
         q_sucess_ratio = f"""
@@ -166,6 +167,8 @@ class SrsApp:
     @check_conn
     def get_due_reviews(self) -> DataFrame:
         date_col = "NextAnswerDateISO"
+
+        # this will get all items that have their reviews BEFORE the current time in **UTC**
         q = f"""
             SELECT * FROM {self.name_srs_table}
             WHERE {date_col} < current_timestamp;
