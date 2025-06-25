@@ -41,6 +41,9 @@ class AddTab(ui.element):
                     multiple = True, 
                     label = "JLPT Levels"
                 ).classes("w-64").props("use-chips")
+
+                self.kanji_search = ui.input("Kanji").classes("w-64").props("clearable")
+                self.kana_search = ui.input("Kana").classes("w-64").props("clearable")
     
                 search_button = ui.button("Search", color = "primary", on_click = lambda: self.update_search_results())
     
@@ -65,13 +68,28 @@ class AddTab(ui.element):
     
         # sql query conditions to filter results
         jlpt_condition = ",".join([str(val) for val in self.jlpt_levels.value])
+        kanji_condition = self.kanji_search.value
+        kana_condition = self.kana_search.value
     
         # empty list to store dfs from kanji and vocab
         list_dfs = []
     
         # handle kanji
         if "kanji" in self.item_type.value:
-            condition = f"k.JlptLevel IN ({jlpt_condition})"
+            condition = ""
+
+            if len(jlpt_condition) == 0:
+                condition += "k.JlptLevel IN (1, 2, 3, 4, 5)"
+
+            else:
+                condition += f"k.JlptLevel IN ({jlpt_condition})"
+
+            if kanji_condition != "":
+                if condition.endswith("AND"):
+                    condition += f"k.Character = '{kanji_condition}'"
+
+                else:
+                    condition += f" AND k.Character = '{kanji_condition}'"
     
             df_kanji = self.srs_app.discover_new_kanji(condition = condition)
     
@@ -100,7 +118,28 @@ class AddTab(ui.element):
     
         # handle vocab
         if "vocab" in self.item_type.value:
-            condition = f"v.JlptLevel IN ({jlpt_condition})"
+            condition = ""
+
+            if len(jlpt_condition) == 0:
+                condition += "v.JlptLevel IN (1, 2, 3, 4, 5)"
+
+            else:
+                condition += f"v.JlptLevel IN ({jlpt_condition})"
+
+            if kanji_condition != "":
+                if condition.endswith("AND"):
+                    condition += f"v.KanjiWriting = '{kanji_condition}'"
+
+                else:
+                    condition += f" AND v.KanjiWriting = '{kanji_condition}'"
+
+            if kana_condition != "":
+                if condition.endswith("AND"):
+                    condition += f"v.KanaWriting = '{kana_condition}'"
+
+                else:
+                    condition += f" AND v.KanaWriting = '{kana_condition}'"
+            
             # if search_input.value:
                 # level_condition += f" AND (v.KanjiWriting LIKE '%{search_input.value}%' OR v.KanaWriting LIKE '%{search_input.value}%')"
             df_vocab = self.srs_app.discover_new_vocab(condition = condition)

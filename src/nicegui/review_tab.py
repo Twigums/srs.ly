@@ -52,9 +52,9 @@ class ReviewTab(ui.element):
             self.correct_reading_display.visible = False
             self.correct_meaning_display.visible = False
 
-        """
-        functions for the review card
-        """
+    """
+    functions for the review card
+    """
 
     # start review
     def start_review(self) -> bool:
@@ -255,7 +255,7 @@ class ReviewTab(ui.element):
                         res = "delete letter"
 
                 # pyokaka's greedy algoirthm requires this roundabout
-                case "n" if self.text_buffer.endswith("n"):
+                case "n" if self.text_buffer.endswith("n") and (self.res_display.text != self.incorrect_message):
                     match card_type:
                         case "reading":
 
@@ -270,7 +270,7 @@ class ReviewTab(ui.element):
 
                 # if the user has clicked a character in our defined alphabet:
                 # add that character to the text buffer
-                case _ if key_str in self.alphabet:
+                case _ if (key_str in self.alphabet) and (self.res_display.text != self.incorrect_message):
                     self.text_buffer += key_str.lower()
 
                     res = f"insert {key_str}"
