@@ -1,12 +1,12 @@
 # how many vocab/kanji can show up in a rotating set
 max_reviews_at_once = 10
 
-# how many times app can write to the database before having to commit
-entries_before_commit = 10
-
 # minimum threshold for fuzzy string matching (decrease for more typing mistakes)
 # from 0 - 100
 match_score_threshold = 85
+
+# how many times app can write to the database before having to commit
+entries_before_commit = 10
 
 # path to sqlite databases
 # srs_db contains user data

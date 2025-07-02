@@ -21,9 +21,8 @@ class ReviewTab(ui.element):
         self.text_buffer = ""
         self.kana_output = ""
 
-        # initialize empty vars
-        self.item_dict = dict()
-        self.keyboard = None
+        # keyboard to allow typing using our specified keys/keybinds
+        self.keyboard = ui.keyboard(on_key = self.handle_key)
 
         # contents
         self.review_card = ui.card().classes("card-container")
@@ -60,6 +59,9 @@ class ReviewTab(ui.element):
     def start_review(self) -> bool:
         reviews = self.srs_app.start_review_session()
 
+        # initialize empty vars
+        self.item_dict = dict()
+
         match reviews:
             case None:
                 ui.notify("DB not connected.")
@@ -77,9 +79,6 @@ class ReviewTab(ui.element):
                 self.review_separator.visible = True
 
                 self.update_review_display()
-
-                # keyboard to allow typing using our specified keys/keybinds
-                self.keyboard = ui.keyboard(on_key = self.handle_key)
 
         return True
 

@@ -263,6 +263,7 @@ class SrsApp:
         self.current_index = 0
         self.current_completed = 0
         self.stop_updating_review = False
+        self.current_reviews = []
 
         # get due reviews
         df = self.get_due_reviews()
