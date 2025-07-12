@@ -130,10 +130,10 @@ class SrsApp:
                                 ORDER BY expected.val;
                                 """
 
-        # local time "today"
+        # get the end of day today, but in utc! (items are stored using now -> utc time)
         q_today_review_count = f"""
                                SELECT COUNT(*) FROM {self.name_srs_table}
-                               WHERE {date_col} < datetime('now', 'localtime', 'start of day', '+1 day', '-1 second');
+                               WHERE {date_col} < datetime('now', 'localtime', 'start of day', '+1 day', '-1 second', 'utc');
                                """
 
         q_sucess_ratio = f"""
