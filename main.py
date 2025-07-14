@@ -40,32 +40,41 @@ def check_device() -> None:
 def index() -> None:
     ui.add_head_html("<link href='https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap' rel='stylesheet'>")
     ui.add_head_html("""
-    <style>
-        .japanese-main-text {
-            font-family: 'Noto Sans JP', sans-serif;
-            font-size: 2rem;
-        }
-        .japanese-text {
-            font-family: 'Noto Sans JP', sans-serif;
-        }
-        .main-text {
-            font-family: 'Noto Sans', sans-serif;
-            font-size: 2rem;
-        }
-        .card-container {
-            min-width: 10rem;
-            max-width: 100rem;
-            margin: 0 auto;
-        }
-        .table-container table td {
-            padding: 8px;
-            vertical-align: top;
-        }
-        .vocab-table .q-table__middle {
-            max-height: 25rem;
-            overflow-y: auto;
-        }
-    </style>
+        <style>
+            .japanese-main-text {
+                font-family: 'Noto Sans JP', sans-serif;
+                font-size: 2rem;
+            }
+            .japanese-text {
+                font-family: 'Noto Sans JP', sans-serif;
+            }
+            .main-text {
+                font-family: 'Noto Sans', sans-serif;
+                font-size: 2rem;
+            }
+            .card-container {
+                min-width: 10rem;
+                max-width: 100rem;
+                margin: 0 auto;
+            }
+            .table-container table td {
+                padding: 8px;
+                vertical-align: top;
+            }
+            .vocab-table .q-table__middle {
+                max-height: 25rem;
+                overflow-y: auto;
+            }
+        </style>
+    """)
+
+    # prevents space bar from making a page down operation
+    ui.run_javascript("""
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space' && event.target === document.body) {
+                event.preventDefault();
+            }
+        });
     """)
 
     # main items on the website

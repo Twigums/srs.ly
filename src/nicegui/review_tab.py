@@ -36,8 +36,9 @@ class ReviewTab(ui.element):
             self.reading_display = ui.label("").classes("japanese-main-text text-center q-py-xl text-white")
     
             self.review_separator = ui.separator()
-    
-            self.user_romaji = ui.label("").classes("text-white")
+
+            # bind the keyboard to whenever user romaji is visible
+            self.user_romaji = ui.label("").classes("text-white").bind_visibility_to(self.keyboard, "active")
             self.user_hiragana = ui.label("").classes("japanese-main-text text-white")
     
             self.res_display = ui.label("").classes("japanese-main-text text-white")
@@ -74,6 +75,7 @@ class ReviewTab(ui.element):
                 return False
 
             case _:
+                self.review_header.visible = True
                 self.start_button.visible = False
                 self.reading_display.visible = True
                 self.review_separator.visible = True
@@ -182,7 +184,7 @@ class ReviewTab(ui.element):
                     return "submit"
 
                 # if the user clicks the "ignore answer key" after the incorrect message is shown:
-                # they want us to acknowledge they made a mistake and would like to try again
+                # they acknowledge they made a mistake and would like to try again
                 case self.srs_app.key_ignore_answer if self.res_display.text == self.incorrect_message:
                     self.process_answer(self.user_hiragana.text)
 
@@ -265,7 +267,7 @@ class ReviewTab(ui.element):
                         case "meaning":
                             self.text_buffer += key_str.lower()
 
-                    res = "append kana n"
+                    res = "append kana n"                    
 
                 # if the user has clicked a character in our defined alphabet:
                 # add that character to the text buffer
