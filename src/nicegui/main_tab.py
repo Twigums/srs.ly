@@ -3,7 +3,7 @@ from nicegui import ui
 
 class MainTab(ui.element):
     def __init__(self, srs_app):
-        # super().__init__()
+        super().__init__()
 
         self.srs_app = srs_app
 

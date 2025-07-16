@@ -1,5 +1,6 @@
-from nicegui import ui
 import pandas as pd
+
+from nicegui import ui
 
 
 # helper function to bfill, but for some reason there are funny "" or " " in the df?
@@ -17,6 +18,8 @@ def first_valid(row: pd.core.series.Series) -> str | int | float | None:
 
 class AddTab(ui.element):
     def __init__(self, srs_app):
+        super().__init__()
+
         self.srs_app = srs_app
 
         # dictionary to store selected item information
@@ -76,23 +79,28 @@ class AddTab(ui.element):
     
         # handle kanji
         if "kanji" in self.item_type.value:
-            condition = ""
+            conditions = []
 
             if len(jlpt_condition) == 0:
-                condition += "k.JlptLevel IN (1, 2, 3, 4, 5)"
+                conditions.append("k.JlptLevel IN (1, 2, 3, 4, 5)")
 
             else:
-                condition += f"k.JlptLevel IN ({jlpt_condition})"
+                conditions.append(f"k.JlptLevel IN ({jlpt_condition})")
 
-            if kanji_condition != "":
-                if condition.endswith("AND"):
-                    condition += f"k.Character = '{kanji_condition}'"
+            if kanji_condition not in ["", None]:
+                conditions.append(f"k.Character = '{kanji_condition}'")
 
-                else:
-                    condition += f" AND k.Character = '{kanji_condition}'"
-    
-            df_kanji = self.srs_app.discover_new_kanji(condition = condition)
-    
+            if kana_condition not in ["", None]:
+                conditions.append(f"',' || k.OnYomi || ',' LIKE '%,{kana_condition},%'")
+
+            # need to set a base condition if no filters were applied
+            if conditions == []:
+                df_kanji = self.srs_app.discover_new_kanji()
+
+            else:
+                condition = " AND ".join(conditions)
+                df_kanji = self.srs_app.discover_new_kanji(condition = condition)
+
             if not df_kanji.empty:
                 display_df_kanji = df_kanji[["Character", "OnYomi", "KunYomi", "Nanori", "Meaning", "JlptLevel", "WkLevel", "MostUsedRank", "NewspaperRank"]].copy()
                 display_df_kanji.columns = ["Kanji", "Onyomi", "Kunyomi", "Nanori", "Meanings", "JLPT", "Wanikani", "Frequency Rank", "Wiki Rank"]
@@ -118,31 +126,27 @@ class AddTab(ui.element):
     
         # handle vocab
         if "vocab" in self.item_type.value:
-            condition = ""
+            conditions = []
 
             if len(jlpt_condition) == 0:
-                condition += "v.JlptLevel IN (1, 2, 3, 4, 5)"
+                conditions.append("v.JlptLevel IN (1, 2, 3, 4, 5)")
 
             else:
-                condition += f"v.JlptLevel IN ({jlpt_condition})"
+                conditions.append(f"v.JlptLevel IN ({jlpt_condition})")
 
-            if kanji_condition != "":
-                if condition.endswith("AND"):
-                    condition += f"v.KanjiWriting = '{kanji_condition}'"
+            if kanji_condition not in ["", None]:
+                conditions.append(f"v.KanjiWriting = '{kanji_condition}'")
 
-                else:
-                    condition += f" AND v.KanjiWriting = '{kanji_condition}'"
+            if kana_condition not in ["", None]:
+                conditions.append(f"',' || v.KanaWriting || ',' LIKE '%,{kana_condition},%'")
 
-            if kana_condition != "":
-                if condition.endswith("AND"):
-                    condition += f"v.KanaWriting = '{kana_condition}'"
-
-                else:
-                    condition += f" AND v.KanaWriting = '{kana_condition}'"
-            
-            # if search_input.value:
-                # level_condition += f" AND (v.KanjiWriting LIKE '%{search_input.value}%' OR v.KanaWriting LIKE '%{search_input.value}%')"
-            df_vocab = self.srs_app.discover_new_vocab(condition = condition)
+            # need to set a base condition if no filters were applied
+            if conditions == []:
+                df_vocab = self.srs_app.discover_new_vocab()
+    
+            else:
+                condition = " AND ".join(conditions)
+                df_vocab = self.srs_app.discover_new_vocab(condition = condition)
             
             if not df_vocab.empty:
                 display_df_vocab = df_vocab[["KanjiWriting", "KanaWriting", "Meaning", "IsCommon", "JlptLevel", "WkLevel", "FrequencyRank", "WikiRank", "ShortName"]].copy()
@@ -266,8 +270,8 @@ class AddTab(ui.element):
                             kanji_input = ui.input("Kanji", value = item["Kanji"])
                             readings_input = ui.input("Readings", value = item["Readings"])
                             meanings_input = ui.input("Meanings", value = item["Meanings"])
-                            readings_note_input = ui.input("Reading Note", placeholder = "remembering tips!")
-                            meanings_note_input = ui.input("Meaning Note", placeholder = "remembering tips!")
+                            reading_notes_input = ui.input("Reading Notes", placeholder = "remembering tips!")
+                            meaning_notes_input = ui.input("Meaning Notes", placeholder = "remembering tips!")
 
                         # a separator makes everything more readable
                         ui.separator().style("height: 0.1rem; width: 2rem;")
@@ -276,8 +280,8 @@ class AddTab(ui.element):
                         "kanji": kanji_input,
                         "readings": readings_input,
                         "meanings": meanings_input,
-                        "reading_note": readings_note_input,
-                        "meaning_note": meanings_note_input,
+                        "reading_notes": reading_notes_input,
+                        "meaning_notes": meaning_notes_input,
                         "type": item["type"],
                     }
 

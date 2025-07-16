@@ -4,6 +4,8 @@ from nicegui.events import ValueChangeEventArguments
 
 class OptionsTab(ui.element):
     def __init__(self, srs_app):
+        super().__init__()
+
         self.srs_app = srs_app
 
         self.db_switch = ui.switch("DB Status", value = True, on_change = lambda e: self.set_db_status(e))

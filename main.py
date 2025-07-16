@@ -4,6 +4,7 @@ from src.srs_app import SrsApp
 from src.nicegui.main_tab import MainTab
 from src.nicegui.review_tab import ReviewTab
 from src.nicegui.add_tab import AddTab
+from src.nicegui.edit_tab import EditTab
 from src.nicegui.options_tab import OptionsTab
 
 
@@ -88,7 +89,8 @@ def index() -> None:
     with tabs:
         main_tab = ui.tab("Main")
         review_tab = ui.tab("Review")
-        add_tab = ui.tab("Add Item")
+        add_tab = ui.tab("Add Items")
+        edit_tab = ui.tab("Edit Items")
         options_tab = ui.tab("Options")
 
     # main tab should be the default
@@ -106,6 +108,10 @@ def index() -> None:
         # add items tab
         with ui.tab_panel(add_tab):
             AddTab(srs_app)
+
+        # edit items
+        with ui.tab_panel(edit_tab):
+            EditTab(srs_app)
 
         # options tab
         with ui.tab_panel(options_tab):

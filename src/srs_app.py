@@ -33,6 +33,21 @@ class SrsApp:
         with open("config.toml", "rb") as f:
             config = tomllib.load(f)
 
+        # relevant column name as a dictionary
+        self.col_dict = {
+            "current_grade_col": "CurrentGrade",
+            "failure_col": "FailureCount",
+            "success_col": "SuccessCount",
+            "date_col": "NextAnswerDateISO",
+            "vocab_col": "AssociatedVocab",
+            "kanji_col": "AssociatedKanji",
+            "id_col": "ID",
+            "houhou_last_update_col": "LastUpdateDate",
+            "houhou_creation_col": "CreationDate",
+            "houhou_next_answer_col": "NextAnswerDate",
+            "houhou_suspension_col": "SuspensionDate",
+        }
+
         # set initial definitions from toml file
         self.max_reviews_at_once = config["max_reviews_at_once"]
         self.entries_before_commit = config["entries_before_commit"]
@@ -53,12 +68,18 @@ class SrsApp:
         self.conn = None
         self.cursor = None
         self.entries_without_commit = 0
-        self.current_reviews = []
+        self.due_review_ids = []
+        self.len_review_ids = 0
+        self.reset_review_variables()
+
+    # reset a few variables
+    def reset_review_variables(self) -> None:
         self.current_index = 0
         self.current_completed = 0
         self.stop_updating_review = False
-        self.due_review_ids = []
-        self.len_review_ids = 0
+        self.current_reviews = []
+
+        return None
 
     # initialize sql connection to db
     def init_db(self) -> bool:
@@ -110,11 +131,6 @@ class SrsApp:
     # retrieve counts and ratio from db
     @check_conn
     def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame]:
-        current_grade_col = "CurrentGrade"
-        failure_col = "FailureCount"
-        success_col = "SuccessCount"
-        date_col = "NextAnswerDateISO"
-
         max_srs_grade = max(int(x) for x in self.srs_interval.keys())
 
         q_current_grade_count = f"""
@@ -123,9 +139,9 @@ class SrsApp:
                                     SELECT {max_srs_grade}
                                 )
                                 SELECT expected.val AS val,
-                                    COUNT(srs.{current_grade_col})
+                                    COUNT(srs.{self.col_dict["current_grade_col"]})
                                 FROM expected
-                                LEFT JOIN {self.name_srs_table} AS srs ON srs.{current_grade_col} = expected.val
+                                LEFT JOIN {self.name_srs_table} AS srs ON srs.{self.col_dict["current_grade_col"]} = expected.val
                                 GROUP BY expected.val
                                 ORDER BY expected.val;
                                 """
@@ -133,14 +149,14 @@ class SrsApp:
         # get the end of day today, but in utc! (items are stored using now -> utc time)
         q_today_review_count = f"""
                                SELECT COUNT(*) FROM {self.name_srs_table}
-                               WHERE {date_col} < datetime('now', 'localtime', 'start of day', '+1 day', '-1 second', 'utc');
+                               WHERE {self.col_dict["date_col"]} < datetime('now', 'localtime', 'start of day', '+1 day', '-1 second', 'utc');
                                """
 
         q_sucess_ratio = f"""
                          SELECT 
                              CASE
-                             WHEN (SUM({failure_col}) + SUM({success_col})) = 0 THEN 0
-                             ELSE SUM({success_col}) * 1.0 / (SUM({failure_col}) + SUM({success_col}))
+                             WHEN (SUM({self.col_dict["failure_col"]}) + SUM({self.col_dict["success_col"]})) = 0 THEN 0
+                             ELSE SUM({self.col_dict["success_col"]}) * 1.0 / (SUM({self.col_dict["failure_col"]}) + SUM({self.col_dict["success_col"]}))
                              END AS ratio
                          FROM srs_db.SrsEntrySet
                          """
@@ -166,12 +182,11 @@ class SrsApp:
     # that means that item is ready for review
     @check_conn
     def get_due_reviews(self) -> DataFrame:
-        date_col = "NextAnswerDateISO"
 
         # this will get all items that have their reviews BEFORE the current time in **UTC**
         q = f"""
             SELECT * FROM {self.name_srs_table}
-            WHERE {date_col} < current_timestamp;
+            WHERE {self.col_dict["date_col"]} < current_timestamp;
             """
 
         df = pd.read_sql_query(q, self.conn)
@@ -180,14 +195,13 @@ class SrsApp:
     # returns df of all vocabs present in the user's srs review
     @check_conn
     def get_study_vocab(self) -> set:
-        vocab_col = "AssociatedVocab"
         q = f"""
-            SELECT {vocab_col} FROM {self.name_srs_table};
+            SELECT {self.col_dict["vocab_col"]} FROM {self.name_srs_table};
             """
 
         df = pd.read_sql_query(q, self.conn)
 
-        all_vocabs = set(df[vocab_col].dropna())
+        all_vocabs = set(df[self.col_dict["vocab_col"]].dropna())
 
         return all_vocabs
 
@@ -196,34 +210,53 @@ class SrsApp:
     # i should also blacklist all the hiragana and katakana, but it is what it is
     @check_conn
     def get_study_kanji(self) -> set:
-        vocab_col, kanji_col = ("AssociatedVocab", "AssociatedKanji")
         q = f"""
-            SELECT {vocab_col}, {kanji_col} FROM {self.name_srs_table}
-            WHERE LENGTH({vocab_col}) = 1
-            OR LENGTH({kanji_col}) = 1;
+            SELECT {self.col_dict["vocab_col"]}, {self.col_dict["kanji_col"]} FROM {self.name_srs_table}
+            WHERE LENGTH({self.col_dict["vocab_col"]}) = 1
+            OR LENGTH({self.col_dict["kanji_col"]}) = 1;
             """
 
         df = pd.read_sql_query(q, self.conn)
 
-        vocab_kanjis = set(df[vocab_col].dropna())
+        vocab_kanjis = set(df[self.col_dict["vocab_col"]].dropna())
         kanji_kanjis = set(df[kanji_col].dropna())
 
         all_kanjis = vocab_kanjis.union(kanji_kanjis)
 
         return all_kanjis
 
+    @check_conn
+    def filter_study_items(self, item_type: str, condition: str = "1=1") -> DataFrame:
+        match item_type:
+            case "vocab":
+                item_col = self.col_dict["vocab_col"]
+
+            case "kanji":
+                item_col = self.col_dict["kanji_col"]
+
+            case _:
+                raise Exception
+
+        q = f"""
+            SELECT * FROM {self.name_srs_table}
+            WHERE {item_col} IS NOT NULL
+            AND {condition};
+            """
+
+        df = pd.read_sql_query(q, self.conn)
+        return df
+
     # returns df of vocab that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
     @check_conn
     def discover_new_vocab(self, condition: str = "v.JlptLevel IN (1, 2, 3, 4, 5)") -> DataFrame:
-        vocab_col = "AssociatedVocab"
         q = f"""
             WITH v_except AS (
                 SELECT * FROM VocabSet AS v
                 WHERE {condition}
                 AND NOT EXISTS (
                     SELECT 1 FROM {self.name_srs_table} AS srs
-                    WHERE srs.{vocab_col} = v.KanjiWriting
+                    WHERE srs.{self.col_dict["vocab_col"]} = v.KanjiWriting
                     )
                 )
             SELECT * FROM v_except
@@ -240,14 +273,13 @@ class SrsApp:
     # sort after using pd.sort_values to put nans at the end
     @check_conn
     def discover_new_kanji(self, condition: str = "k.JpltLevel IN (1, 2, 3, 4, 5)") -> DataFrame:
-        kanji_col = "AssociatedKanji"
         q = f"""
             WITH k_except AS (
                 SELECT * FROM KanjiSet AS k
                 WHERE {condition}
                 AND NOT EXISTS (
                     SELECT 1 FROM {self.name_srs_table} AS srs
-                    WHERE srs.{kanji_col} = k.Character
+                    WHERE srs.{self.col_dict["kanji_col"]} = k.Character
                     )
                 )
             SELECT * FROM k_except as k
@@ -260,10 +292,7 @@ class SrsApp:
     # initialize the review session
     @check_conn
     def start_review_session(self) -> list:
-        self.current_index = 0
-        self.current_completed = 0
-        self.stop_updating_review = False
-        self.current_reviews = []
+        self.reset_review_variables()
 
         # get due reviews
         df = self.get_due_reviews()
@@ -272,7 +301,7 @@ class SrsApp:
             return []
 
         # sort them by when they were due, so the user can complete the earliest ones first
-        sorted_df = df.sort_values("NextAnswerDateISO", ascending = False)
+        sorted_df = df.sort_values(self.col_dict["date_col"], ascending = False)
         self.due_review_ids = sorted_df["ID"].tolist()
         self.len_review_ids = len(self.due_review_ids)
 
@@ -300,11 +329,10 @@ class SrsApp:
         if not self.stop_updating_review:
 
             # adds one id
-            id_col = "ID"
             current_id = self.due_review_ids.pop()
             q = f"""
                 SELECT * FROM {self.name_srs_table}
-                WHERE {id_col} = {current_id};
+                WHERE {self.col_dict["id_col"]} = {current_id};
                 """
     
             df = pd.read_sql_query(q, self.conn)
@@ -320,8 +348,8 @@ class SrsApp:
             review_type = None
             current_item = None
 
-            kanji_item = item.get("AssociatedKanji")
-            vocab_item = item.get("AssociatedVocab")
+            kanji_item = item.get(self.col_dict["kanji_col"])
+            vocab_item = item.get(self.col_dict["vocab_col"])
 
             if kanji_item:
                 review_type = "kanji"
@@ -354,7 +382,6 @@ class SrsApp:
     # adds another valid meaning to the item in the db
     @check_conn
     def add_valid_response(self, user_input: str, item: dict) -> None:
-        id_col = "ID"
         card_type = item["card_type"]
         item_id = item["ID"]
 
@@ -369,7 +396,7 @@ class SrsApp:
             UPDATE {self.name_srs_table}
             SET
                 {response_col} = ?
-            WHERE {id_col} = {item_id};
+            WHERE {self.col_dict["id_col"]} = {item_id};
             """
 
         valid_responses = item[response_col]
@@ -401,8 +428,8 @@ class SrsApp:
         success_count = 0
         associated_vocab = None
         associated_kanji = None
-        meaning_note = item["meaning_note"].value
-        reading_note = item["reading_note"].value
+        meaning_notes = item["meaning_notes"].value
+        reading_notes = item["reading_notes"].value
         tags = None
         is_deleted = 0
         last_update_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
@@ -417,22 +444,21 @@ class SrsApp:
                 associated_kanji = item["kanji"].value
 
         # big tuple...
-        self.conn.execute(q, (meanings, readings, current_grade, failure_count, success_count, associated_vocab, associated_kanji, meaning_note, reading_note, tags, is_deleted, last_update_date, creation_date, next_answer_date))
+        self.conn.execute(q, (meanings, readings, current_grade, failure_count, success_count, associated_vocab, associated_kanji, meaning_notes, reading_notes, tags, is_deleted, last_update_date, creation_date, next_answer_date))
         self.conn.commit()
 
         return None
 
     # after an answer has been processed, edit the item's status in the db
     @check_conn
-    def update_review_item(self, item_id: str, res: bool):
-        id_col = "ID"
+    def update_review_item(self, item_id: str, res: bool) -> None:
         q_retrieve_item = f"""
                           SELECT 
                               CurrentGrade,
                               FailureCount,
                               SuccessCount
                           FROM {self.name_srs_table}
-                          WHERE {id_col} = {item_id};
+                          WHERE {self.col_dict["id_col"]} = {item_id};
                           """
         q_update_item = f"""
                         UPDATE {self.name_srs_table}
@@ -442,7 +468,7 @@ class SrsApp:
                             SuccessCount = ?,
                             LastUpdateDateISO = current_timestamp,
                             NextAnswerDateISO = ?
-                        WHERE {id_col} = {item_id};
+                        WHERE {self.col_dict["id_col"]} = {item_id};
                         """
 
         df = pd.read_sql_query(q_retrieve_item, self.conn)
@@ -486,11 +512,58 @@ class SrsApp:
 
         return None
 
+    # after user edits an item, we should change its respective variables
+    @check_conn
+    def edit_review_item(self, item: dict) -> None:
+        q = f"""
+            UPDATE {self.name_srs_table}
+            SET
+                Meanings = ?,
+                Readings = ?,
+                CurrentGrade = ?,
+                AssociatedVocab = ?,
+                AssociatedKanji = ?,
+                MeaningNote = ?,
+                ReadingNote = ?,
+                LastUpdateDateISO = current_timestamp,
+                NextAnswerDateISO = ?
+            WHERE {self.col_dict["id_col"]} = {item["item_id"]};
+            """
+
+        # default definitions
+        # timestamp as such for both readability and debugging
+        meanings = item["meanings"].value
+        readings = item["readings"].value
+        current_grade = item["current_grade"].value
+        associated_vocab = None
+        associated_kanji = None
+        meaning_notes = item["meaning_notes"].value
+        reading_notes = item["reading_notes"].value
+        next_answer_date = item["next_answer"].value
+
+        match item["type"]:
+            case "vocab":
+                associated_vocab = item["kanji"].value
+
+            case "kanji":
+                associated_kanji = item["kanji"].value
+
+        # big tuple...
+        self.conn.execute(q, (meanings, readings, current_grade, associated_vocab, associated_kanji, meaning_notes, reading_notes, next_answer_date))
+        self.conn.commit()
+
+        return None
+
     # function to convert db from houhou
     # specifically, this just adds similar columns representing time but in iso format for readability
     @check_conn
     def convert_from_houhou(self) -> None:
-        names_date_col = ["LastUpdateDate", "CreationDate", "NextAnswerDate", "SuspensionDate"]
+        names_date_col = [
+            self.col_dict["houhou_last_update_col"],
+            self.col_dict["houhou_creation_col"],
+            self.col_dict["houhou_next_answer_col"],
+            self.col_dict["houhou_suspension_col"],
+        ]
 
         for name_col in names_date_col:
             name_iso_col = name_col + "ISO"
@@ -520,6 +593,7 @@ class SrsApp:
             # most likely it's just saying the column exists if you run this function multiple times
             except Exception as e:
                 print(f"{name_col}: {e}")
+
                 continue
 
         return None

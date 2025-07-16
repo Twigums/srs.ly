@@ -8,6 +8,8 @@ from rapidfuzz import process, fuzz
 
 class ReviewTab(ui.element):
     def __init__(self, srs_app):
+        super().__init__()
+
         self.srs_app = srs_app
 
         # define the proper alphabet for review entry
