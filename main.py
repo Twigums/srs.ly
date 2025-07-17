@@ -5,6 +5,7 @@ from src.nicegui.main_tab import MainTab
 from src.nicegui.review_tab import ReviewTab
 from src.nicegui.add_tab import AddTab
 from src.nicegui.edit_tab import EditTab
+from src.nicegui.search_tab import SearchTab
 from src.nicegui.options_tab import OptionsTab
 
 
@@ -91,6 +92,7 @@ def index() -> None:
         review_tab = ui.tab("Review")
         add_tab = ui.tab("Add Items")
         edit_tab = ui.tab("Edit Items")
+        search_tab = ui.tab("Search")
         options_tab = ui.tab("Options")
 
     # main tab should be the default
@@ -112,6 +114,10 @@ def index() -> None:
         # edit items
         with ui.tab_panel(edit_tab):
             EditTab(srs_app)
+
+        # draw and search
+        with ui.tab_panel(search_tab):
+            SearchTab(srs_app)
 
         # options tab
         with ui.tab_panel(options_tab):

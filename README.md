@@ -7,3 +7,5 @@ works on python 3.13; will not work on python < 3.10 due to `match` statements b
 2. `pip install requirements.txt`
 
 3. `python ui.py`
+
+remember to set `export GOOGLE_APPLICATION_CREDENTIALS=/path/to/secret.json`
