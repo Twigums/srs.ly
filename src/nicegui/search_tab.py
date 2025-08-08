@@ -102,8 +102,9 @@ class SearchTab(ui.element):
 
                 # if ctrl + z, remove last stroke
                 case "z" if e.modifiers.ctrl:
-                    self.strokes.pop()
-                    self.draw_area.content = " ".join(self.strokes)
+                    if self.strokes != []:
+                        self.strokes.pop()
+                        self.draw_area.content = " ".join(self.strokes)
 
                 case "s" if e.modifiers.ctrl:
                     ui.run_javascript(f"""

@@ -258,7 +258,7 @@ class ReviewTab(ui.element):
                         res = "delete letter"
 
                 # pyokaka's greedy algoirthm requires this roundabout
-                case "n" if self.text_buffer.endswith("n") and (self.res_display.text != self.incorrect_message):
+                case _ if key in ["n", "N"] and self.text_buffer.endswith("n") and (self.res_display.text != self.incorrect_message):
                     match card_type:
                         case "reading":
 
