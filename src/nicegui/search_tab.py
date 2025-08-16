@@ -2,10 +2,10 @@ import asyncio
 import base64
 import cairosvg
 import io
+import os
 
 from nicegui import ui, events
 from nicegui.events import KeyEventArguments, MouseEventArguments
-from google.cloud import vision
 from PIL import Image
 
 
@@ -16,31 +16,40 @@ class SearchTab(ui.element):
         super().__init__()
 
         self.srs_app = srs_app
-        self.vision_client = vision.ImageAnnotatorClient()
 
-        self.draw_area = ui.interactive_image(
-            size = (100, 100),
-            on_mouse = self.handle_mouse,
-            events = ["mousedown", "mousemove", "mouseup"],
-            cross = False
-        ).classes("w-full bg-slate-100").props('id=draw-canvas')
+        self.vision_client = None
 
-        self.keyboard = ui.keyboard(on_key = self.handle_key)
+        if "GOOGLE_APPLICATION_CREDENTIALS" in os.environ:
+            from google.cloud import vision
 
-        self.clear_button = ui.button("Clear Drawing", color = "primary", on_click = lambda: self.clear_strokes())
-        self.predict_button = ui.button("Predict", color = "primary", on_click = lambda: self.predict())
+            self.vision_client = vision.ImageAnnotatorClient()
 
-        self.prediction_label = ui.label("Click the predict button!")
+            self.draw_area = ui.interactive_image(
+                size = (100, 100),
+                on_mouse = self.handle_mouse,
+                events = ["mousedown", "mousemove", "mouseup"],
+                cross = False
+            ).classes("w-full bg-slate-100").props('id=draw-canvas')
+    
+            self.keyboard = ui.keyboard(on_key = self.handle_key)
+    
+            self.clear_button = ui.button("Clear Drawing", color = "primary", on_click = lambda: self.clear_strokes())
+            self.predict_button = ui.button("Predict", color = "primary", on_click = lambda: self.predict())
+    
+            self.prediction_label = ui.label("Click the predict button!")
+    
+            self.draw_area.signature_path = ""
+            self.draw_area.is_drawing = None
+    
+            self.draw_color = "Black"
+            self.draw_stroke_width = 1
+            self.strokes = []
+    
+            self.canvas_x_offset = 65
+            self.canvas_size = (225, 160)
 
-        self.draw_area.signature_path = ""
-        self.draw_area.is_drawing = None
-
-        self.draw_color = "Black"
-        self.draw_stroke_width = 1
-        self.strokes = []
-
-        self.canvas_x_offset = 65
-        self.canvas_size = (225, 160)
+        else:
+            ui.notify("Google API not found. Did you remember to set the environment variable: 'GOOGLE_APPLICATION_CREDENTIALS'?")
 
     async def predict(self):
         res = []
