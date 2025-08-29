@@ -48,14 +48,19 @@ class AddTab(ui.element):
                 self.kanji_search = ui.input("Kanji").classes("w-64").props("clearable")
                 self.kana_search = ui.input("Kana").classes("w-64").props("clearable")
     
-                search_button = ui.button("Search", color = "primary", on_click = lambda: self.update_search_results())
+                search_button = ui.button("Search",
+                                          color = "primary",
+                                          on_click = lambda: self.update_search_results())
     
             # define containers to display items
             self.table_container = ui.element("div").classes("japanese-text w-full")
             self.items_separator = ui.separator()
             self.input_container = ui.column()
     
-            self.add_button = ui.button("Add Selected Items", color = "green", on_click = lambda: self.add_selected_items())
+            self.add_button = ui.button("Add Selected Items",
+                                        color = "green",
+                                        on_click = lambda: self.add_selected_items())
+
             self.add_spinner = ui.spinner(size = "lg")
     
             self.add_button.visible = False

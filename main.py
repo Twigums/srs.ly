@@ -79,6 +79,13 @@ def index() -> None:
         });
     """)
 
+    # very important -> dark mode
+    if "is_dark_mode" not in app.storage.user:
+        app.storage.user["is_dark_mode"] = False
+    
+    ui_dark = ui.dark_mode()
+    ui_dark.value = app.storage.user["is_dark_mode"]
+
     # main items on the website
     header = ui.header().classes("bg-blue-500 text-white")
     tabs = ui.tabs().classes("w-full")
@@ -137,4 +144,7 @@ if __name__ in {"__main__", "__mp_main__"}:
     else:
         open_port = ui_port
 
-    ui.run(port = open_port, title = ui_web_title)
+    ui.run(port = open_port,
+           title = ui_web_title,
+           storage_secret = "test"
+    )
