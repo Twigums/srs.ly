@@ -87,11 +87,8 @@ def index() -> None:
     ui_dark.value = app.storage.user["is_dark_mode"]
 
     # main items on the website
-    header = ui.header().classes("bg-blue-500 text-white")
     tabs = ui.tabs().classes("w-full")
     
-    with header:
-        ui.label("SRS Tool").classes("text-h4 q-px-md")
 
     # define our tabs we will use
     with tabs:

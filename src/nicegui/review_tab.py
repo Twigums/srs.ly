@@ -40,7 +40,7 @@ class ReviewTab(ui.element):
             self.review_separator = ui.separator()
 
             # bind the keyboard to whenever user romaji is visible
-            self.user_romaji = ui.label("").classes("text-white").bind_visibility_to(self.keyboard, "active")
+            self.user_romaji = ui.label("").classes("text-white") #.bind_visibility_to(self.keyboard, "active")
             self.user_hiragana = ui.label("").classes("japanese-main-text text-white")
     
             self.res_display = ui.label("").classes("japanese-main-text text-white")
@@ -48,6 +48,9 @@ class ReviewTab(ui.element):
             self.correct_reading_display = ui.label("").classes("japanese-main-text text-white")
             self.correct_meaning_display = ui.label("").classes("main-text text-white")
 
+            if self.srs_app.debug_mode == False:
+                self.user_romaji.visible = False
+                
             self.review_progress.visible = False
             self.reading_display.visible = False
             self.review_separator.visible = False
