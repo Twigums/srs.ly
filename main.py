@@ -92,6 +92,7 @@ def create_page(config: AppConfig) -> None:
     setup_dark_mode()
 
     # main items on the website
+    header = ui.header().classes("bg-blue-500 text-white")
     tabs = ui.tabs().classes("w-full")
 
     with header:
