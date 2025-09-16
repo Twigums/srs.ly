@@ -49,6 +49,7 @@ class SrsApp:
         }
 
         # set initial definitions from toml file
+        self.debug_mode = config["debug_mode"]
         self.max_reviews_at_once = config["max_reviews_at_once"]
         self.entries_before_commit = config["entries_before_commit"]
         self.match_score_threshold = config["match_score_threshold"]
