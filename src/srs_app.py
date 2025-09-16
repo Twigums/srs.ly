@@ -89,8 +89,15 @@ class SrsApp:
         try:
             self.conn = sqlite3.connect(self.path_to_full_db)
 
-        except Exception:
-            raise Exception
+        except sqlite3.Error as e:
+            raise f"Conn failed: {e}"
+
+            return False
+
+        except FileNotFoundError as e:
+            raise "File not found: {e}"
+
+            return False
 
         self.cursor = self.conn.cursor()
         self.cursor.execute(f"ATTACH DATABASE '{self.path_to_srs_db}' AS {self.id_srs_db};")

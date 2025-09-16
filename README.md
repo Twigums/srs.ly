@@ -1,6 +1,6 @@
-# SRS Web Tool
+# srs.ly
 
-Requires Python < 3.10 due to `match` statements being used.
+Requires Python <= 3.10 due to `match` statements being used.
 
 ## Setup
 
@@ -13,9 +13,9 @@ pip install -r requirements.txt
 ```
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/secret.json
 ```
-3. Start the app:
+3. Start the app (optionally append a custom port):
 ```
-python main.py
+python main.py [PORT]
 ```
 
 ## Configurations
@@ -23,3 +23,5 @@ Configurations are stored in the `config.toml` file, and all the variables shoul
 
 ## How is the data stored?
 Data is stored in `./db`, and `KanjiDatabase.sqlite` contains a static copy of dictionary information. `SrsDatabase.sqlite` is the dynamic, user data that will change on updates. Lastly, `empty_test.db` is a very small database that contains a few rows for testing and implementation purposes.
+
+The database file names and naming schemes are directly from Houhou SRS. In the future, I might choose to restructure the datasets to suit my needs better.
