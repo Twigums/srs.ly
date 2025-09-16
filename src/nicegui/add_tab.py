@@ -30,7 +30,7 @@ class AddTab(ui.element):
 
         with self.add_card:
             ui.label("Add New Items").classes("text-h4")
-    
+
             # selection filter options
             with ui.row():
                 self.item_type = ui.select(
@@ -38,7 +38,7 @@ class AddTab(ui.element):
                     multiple = True, 
                     label = "Type"
                 ).classes("w-64").props("use-chips")
-    
+
                 self.jlpt_levels = ui.select(
                     options = [1, 2, 3, 4, 5], 
                     multiple = True, 
@@ -47,22 +47,22 @@ class AddTab(ui.element):
 
                 self.kanji_search = ui.input("Kanji").classes("w-64").props("clearable")
                 self.kana_search = ui.input("Kana").classes("w-64").props("clearable")
-    
+
                 search_button = ui.button("Search",
                                           color = "primary",
                                           on_click = lambda: self.update_search_results())
-    
+
             # define containers to display items
             self.table_container = ui.element("div").classes("japanese-text w-full")
             self.items_separator = ui.separator()
             self.input_container = ui.column()
-    
+
             self.add_button = ui.button("Add Selected Items",
                                         color = "green",
                                         on_click = lambda: self.add_selected_items())
 
             self.add_spinner = ui.spinner(size = "lg")
-    
+
             self.add_button.visible = False
             self.add_spinner.visible = False
 
@@ -73,15 +73,15 @@ class AddTab(ui.element):
         self.input_container.clear()
         self.selected_items.clear()
         self.add_button.visible = False
-    
+
         # sql query conditions to filter results
         jlpt_condition = ",".join([str(val) for val in self.jlpt_levels.value])
         kanji_condition = self.kanji_search.value
         kana_condition = self.kana_search.value
-    
+
         # empty list to store dfs from kanji and vocab
         list_dfs = []
-    
+
         # handle kanji
         if "kanji" in self.item_type.value:
             conditions = []
@@ -109,7 +109,7 @@ class AddTab(ui.element):
             if not df_kanji.empty:
                 display_df_kanji = df_kanji[["Character", "OnYomi", "KunYomi", "Nanori", "Meaning", "JlptLevel", "WkLevel", "MostUsedRank", "NewspaperRank"]].copy()
                 display_df_kanji.columns = ["Kanji", "Onyomi", "Kunyomi", "Nanori", "Meanings", "JLPT", "Wanikani", "Frequency Rank", "Wiki Rank"]
-    
+
                 # combine all onyomi, kunyomi, nanori, and meanings into one line
                 display_df_kanji = display_df_kanji.groupby(["Kanji"]).agg({
                     "Onyomi": lambda x: ";".join(dict.fromkeys(x)),
@@ -121,14 +121,14 @@ class AddTab(ui.element):
                     "Frequency Rank": "min",
                     "Wiki Rank": "min",
                 }).reset_index()
-    
+
                 # add a few more columns
                 display_df_kanji["IsCommon"] = ((display_df_kanji["Frequency Rank"].notna() | display_df_kanji["Wiki Rank"].notna()))
                 display_df_kanji["Readings"] = display_df_kanji[["Onyomi", "Kunyomi", "Nanori"]].apply(first_valid, axis = 1)
                 display_df_kanji["Type"] = "kanji"
-    
+
                 list_dfs.append(display_df_kanji)
-    
+
         # handle vocab
         if "vocab" in self.item_type.value:
             conditions = []
@@ -148,15 +148,15 @@ class AddTab(ui.element):
             # need to set a base condition if no filters were applied
             if conditions == []:
                 df_vocab = self.srs_app.discover_new_vocab()
-    
+
             else:
                 condition = " AND ".join(conditions)
                 df_vocab = self.srs_app.discover_new_vocab(condition = condition)
-            
+
             if not df_vocab.empty:
                 display_df_vocab = df_vocab[["KanjiWriting", "KanaWriting", "Meaning", "IsCommon", "JlptLevel", "WkLevel", "FrequencyRank", "WikiRank", "ShortName"]].copy()
                 display_df_vocab.columns = ["Kanji", "Readings", "Meanings", "IsCommon", "JLPT", "Wanikani", "Frequency Rank", "Wiki Rank", "Tags"]
-    
+
                 # combine all meanings and tags into one line
                 display_df_vocab = display_df_vocab.groupby(["Kanji", "Readings"]).agg({
                     "Meanings": lambda x: ";".join(dict.fromkeys(x)),
@@ -167,22 +167,22 @@ class AddTab(ui.element):
                     "Wiki Rank": "min",
                     "Tags": lambda x: ";".join(x),
                 }).reset_index()
-    
+
                 # add type column
                 display_df_vocab["Type"] = "vocab"
-    
+
                 list_dfs.append(display_df_vocab)
-    
+
         # only show if something is selected
         if list_dfs:
-    
+
             # combine both tables so we can display it
             display_df = pd.concat(list_dfs, ignore_index = True)
             display_df = display_df.sort_values(by = ["Wiki Rank"])
-    
+
             with self.table_container:
                 ui.label(f"Found {len(display_df)} items").classes("text-h6")
-    
+
                 with ui.element("div").classes("table-container w-full"):
                     rows = [
                         {
@@ -195,7 +195,7 @@ class AddTab(ui.element):
                             "Frequency Rank": row.get("Frequency Rank", None),
                             "Wiki Rank": row.get("Wiki Rank", None),
                             "Tags": row.get("Tags", None),
-    
+
                             # hidden tags to use for rows
                             "id": i,
                             "type": row["Type"],
@@ -205,7 +205,7 @@ class AddTab(ui.element):
                         }
                         for i, row in display_df.iterrows()
                     ]
-    
+
                     # define columns to display
                     columns = [
                         {"name": "kanji", "label": "Kanji", "field": "Kanji", "required": True},
@@ -218,7 +218,7 @@ class AddTab(ui.element):
                         {"name": "wiki", "label": "Wiki Rank", "field": "Wiki Rank", "sortable": True},
                         {"name": "tags", "label": "Tags", "field": "Tags"},
                     ]
-    
+
                     table = ui.table(
                         rows = rows,
                         columns = columns,
@@ -233,7 +233,7 @@ class AddTab(ui.element):
                     ).classes("w-full vocab-table")
 
         return None
-    
+
     # function to show selected rows as individual rows below table
     def render_inputs(self, selected: list) -> bool:
         self.input_container.clear()
@@ -291,7 +291,7 @@ class AddTab(ui.element):
                     }
 
         return True
-    
+
     # function to send item information to the app
     def add_selected_items(self) -> None:
         self.add_spinner.visible = True

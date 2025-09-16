@@ -30,21 +30,21 @@ class SearchTab(ui.element):
                 events = ["mousedown", "mousemove", "mouseup"],
                 cross = False
             ).classes("w-full bg-slate-100").props('id=draw-canvas')
-    
+
             self.keyboard = ui.keyboard(on_key = self.handle_key)
-    
+
             self.clear_button = ui.button("Clear Drawing", color = "primary", on_click = lambda: self.clear_strokes())
             self.predict_button = ui.button("Predict", color = "primary", on_click = lambda: self.predict())
-    
+
             self.prediction_label = ui.label("Click the predict button!")
-    
+
             self.draw_area.signature_path = ""
             self.draw_area.is_drawing = None
-    
+
             self.draw_color = "Black"
             self.draw_stroke_width = 1
             self.strokes = []
-    
+
             self.canvas_x_offset = 65
             self.canvas_size = (225, 160)
 
@@ -60,19 +60,19 @@ class SearchTab(ui.element):
 
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-    
+
                 ctx.fillStyle = 'white';
                 ctx.fillRect({self.canvas_x_offset}, 0, {self.canvas_size[1]}, {self.canvas_size[0]});
-                
+
                 const svg_data = new XMLSerializer().serializeToString(svg);
                 const svg_data_url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg_data)));
-                
+
                 const img = new Image();
                 img.onload = function() {{
                     ctx.drawImage(img, 0, 0);
                     resolve(canvas.toDataURL('image/png'));
                 }};
-                
+
                 img.src = svg_data_url;
             }});
         """)
@@ -88,7 +88,7 @@ class SearchTab(ui.element):
             res.append(detected_text)
 
         self.prediction_label.text = " ".join(res)
-        
+
     def get_current_stroke(self):
         current_stroke = f"<path d='{self.draw_area.signature_path}' stroke='{self.draw_color}' stroke-width='{self.draw_stroke_width}' fill='none' />"
 
@@ -119,28 +119,28 @@ class SearchTab(ui.element):
                     ui.run_javascript(f"""
                         const draw_element = document.querySelector('#draw-canvas');
                         const svg = draw_element.querySelector('svg');
-            
+
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
-            
+
                         ctx.fillStyle = 'white';
                         ctx.fillRect({self.canvas_x_offset}, 0, {self.canvas_size[1]}, {self.canvas_size[0]});
-            
+
                         const svg_data = new XMLSerializer().serializeToString(svg);
                         const svg_blob = new Blob([svg_data], {{type: 'image/svg+xml;charset=utf-8'}});
                         const svg_url = URL.createObjectURL(svg_blob);
-            
+
                         const img = new Image();
                         img.onload = function() {{
                             ctx.drawImage(img, 0, 0);
-            
+
                             const link = document.createElement('a');
                             link.download = 'drawing.png';
                             link.href = canvas.toDataURL('image/png');
                             link.click();
-            
+
                         }};
-            
+
                         img.src = svg_url;
                     """)
 
@@ -158,7 +158,7 @@ class SearchTab(ui.element):
             # Add to the path while moving
             case "mousemove" if self.draw_area.is_drawing:
                 self.draw_area.signature_path += f"L {e.image_x} {e.image_y}"
-    
+
                 # Show the live drawing by combining all previous paths + current one
                 self.draw_area.content = f"{self.draw_area.content}{self.get_current_stroke()}"
 
@@ -167,6 +167,6 @@ class SearchTab(ui.element):
                 self.draw_area.is_drawing = False  
                 self.draw_area.content += self.get_current_stroke()
                 self.strokes.append(self.draw_area.content)
-    
+
                 # Reset the path for the next drawing
                 self.draw_area.signature_path = ""

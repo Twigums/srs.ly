@@ -1,4 +1,6 @@
 from nicegui import ui, app
+from dataclasses import dataclass
+from typing import Optional
 
 from src.srs_app import SrsApp
 from src.nicegui.main_tab import MainTab
@@ -9,37 +11,29 @@ from src.nicegui.search_tab import SearchTab
 from src.nicegui.options_tab import OptionsTab
 
 
-# initialize the app
-srs_app = SrsApp()
-srs_app.init_db()
+# init config
+@dataclass
+class AppConfig:
 
-ui_port = 8080
-ui_web_title = "SRS Tool"
+    # check if user is using mobile or not
+    is_mobile: bool = False
 
-# get keybinds
-key_ignore_answer = srs_app.keybinds["ignore_answer"]
-key_add_as_valid_response = srs_app.keybinds["add_as_valid_response"]
-key_quit_after_current_set = srs_app.keybinds["quit_after_current_set"].split(",")[-1]
+    srs_app: Optional[object] = None
+    ui_port: int = 8080
+    ui_web_title: str = "srs.ly"
+    ui_storage_secret: str = "test"
 
-# check if user is using mobile or not
-is_mobile = False
-
-app.on_connect(lambda: check_device())
-
-def check_device() -> None:
+def check_device(config: AppConfig) -> None:
     res = ui.context.client.request.headers["user-agent"]
 
-    if "Mobile" in res:
-        global is_mobile
-        is_mobile = True
-
+    config.is_mobile = "Mobile" in res
     print(f"Connected from: {res}")
 
     return None
 
-# main website function
-@ui.page("/")
-def index() -> None:
+def setup_styles() -> None:
+
+    # css
     ui.add_head_html("<link href='https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap' rel='stylesheet'>")
     ui.add_head_html("""
         <style>
@@ -70,7 +64,7 @@ def index() -> None:
         </style>
     """)
 
-    # prevents space bar from making a page down operation
+    # prevent space from scrolling
     ui.run_javascript("""
         document.addEventListener('keydown', function(event) {
             if (event.code === 'Space' && event.target === document.body) {
@@ -79,16 +73,29 @@ def index() -> None:
         });
     """)
 
-    # very important -> dark mode
+    return None
+
+# very important -> dark mode
+def setup_dark_mode() -> None:
     if "is_dark_mode" not in app.storage.user:
         app.storage.user["is_dark_mode"] = False
-    
+
     ui_dark = ui.dark_mode()
     ui_dark.value = app.storage.user["is_dark_mode"]
 
+    return None
+
+def create_page(config: AppConfig) -> None:
+
+    # setup
+    setup_styles()
+    setup_dark_mode()
+
     # main items on the website
     tabs = ui.tabs().classes("w-full")
-    
+
+    with header:
+        ui.label(config.ui_web_title).classes("text-h4 q-px-md")
 
     # define our tabs we will use
     with tabs:
@@ -105,43 +112,53 @@ def index() -> None:
         # definitions for the main tab
         # we should show stats and refresh it automatically!
         with ui.tab_panel(main_tab):
-            MainTab(srs_app)
+            MainTab(config.srs_app)
 
         # srs review tab to show review cards one by one
         with ui.tab_panel(review_tab):
-            ReviewTab(srs_app)
+            ReviewTab(config.srs_app)
 
         # add items tab
         with ui.tab_panel(add_tab):
-            AddTab(srs_app)
+            AddTab(config.srs_app)
 
         # edit items
         with ui.tab_panel(edit_tab):
-            EditTab(srs_app)
+            EditTab(config.srs_app)
 
         # draw and search
         with ui.tab_panel(search_tab):
-            SearchTab(srs_app)
+            SearchTab(config.srs_app)
 
         # options tab
         with ui.tab_panel(options_tab):
-            OptionsTab(srs_app)
+            OptionsTab(config.srs_app)
 
     return None
 
-# start serving the site
-if __name__ in {"__main__", "__mp_main__"}:
+def main():
+    srs_app = SrsApp()
+    srs_app.init_db()
+
+    config = AppConfig(srs_app = srs_app)
+    app.on_connect(lambda: check_device(config))
+
+    @ui.page("/")
+    def index() -> None:
+        create_page(config)
+
+    # for the sake of testing, be able to change port to whatever
     import sys
 
     if len(sys.argv) == 2:
+        config.ui_port = int(sys.argv[1])
 
-        # for the sake of testing, i want to be able to just host the website on whatever port
-        open_port = int(sys.argv[1])
-
-    else:
-        open_port = ui_port
-
-    ui.run(port = open_port,
-           title = ui_web_title,
-           storage_secret = "test"
+    # serve site
+    ui.run(port = config.ui_port,
+           title = config.ui_web_title,
+           storage_secret = config.ui_storage_secret
     )
+
+# start serving the site
+if __name__ in {"__main__", "__mp_main__"}:
+    main()

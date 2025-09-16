@@ -25,7 +25,7 @@ class EditTab(ui.element):
                     multiple = True, 
                     label = "Type"
                 ).classes("w-64").props("use-chips")
-    
+
                 self.srs_levels = ui.select(
                     options = [key for key in self.srs_app.srs_interval.keys()], 
                     multiple = True, 
@@ -34,17 +34,17 @@ class EditTab(ui.element):
 
                 self.meaning_search = ui.input("Meaning").classes("w-64").props("clearable")
                 self.reading_search = ui.input("Reading").classes("w-64").props("clearable")
-    
+
                 search_button = ui.button("Search", color = "primary", on_click = lambda: self.update_search_results())
-    
+
             # define containers to display items
             self.table_container = ui.element("div").classes("japanese-text w-full")
             self.items_separator = ui.separator()
             self.input_container = ui.column()
-    
+
             self.add_button = ui.button("Edit Selected Items", color = "green", on_click = lambda: self.edit_selected_items())
             self.add_spinner = ui.spinner(size = "lg")
-    
+
             self.add_button.visible = False
             self.add_spinner.visible = False
 
@@ -55,7 +55,7 @@ class EditTab(ui.element):
         self.input_container.clear()
         self.selected_items.clear()
         self.add_button.visible = False
-    
+
         # sql query conditions to filter results
         srs_condition = ",".join([str(val) for val in self.srs_levels.value])
         meaning_condition = self.meaning_search.value
@@ -86,7 +86,7 @@ class EditTab(ui.element):
         # handle kanji
         if "kanji" in self.item_type.value:
             df_kanji = self.srs_app.filter_study_items(item_type = "kanji", condition = condition)
-    
+
             if not df_kanji.empty:
                 display_df_kanji = df_kanji[["ID", "AssociatedKanji", "Readings", "ReadingNote", "Meanings", "MeaningNote", "CurrentGrade", "NextAnswerDateISO"]].copy()
                 display_df_kanji.columns = display_df_columns
@@ -96,9 +96,9 @@ class EditTab(ui.element):
 
         # handle vocab
         if "vocab" in self.item_type.value:
-    
+
             df_vocab = self.srs_app.filter_study_items(item_type = "vocab", condition = condition)
-    
+
             if not df_vocab.empty:
                 display_df_vocab = df_vocab[["ID", "AssociatedVocab", "Readings", "ReadingNote", "Meanings", "MeaningNote", "CurrentGrade", "NextAnswerDateISO"]].copy()
                 display_df_vocab.columns = display_df_columns
@@ -108,14 +108,14 @@ class EditTab(ui.element):
 
         # only show if something is selected
         if list_dfs:
-    
+
             # combine both tables so we can display it
             display_df = pd.concat(list_dfs, ignore_index = True)
             display_df = display_df.sort_values(by = ["Current SRS Grade"])
-    
+
             with self.table_container:
                 ui.label(f"Found {len(display_df)} items").classes("text-h6")
-    
+
                 with ui.element("div").classes("table-container w-full"):
                     rows = [
                         {
@@ -128,7 +128,7 @@ class EditTab(ui.element):
                         }
                         for i, row in display_df.iterrows()
                     ]
-    
+
                     # define columns to display
                     columns = [
                         {"name": "kanji", "label": "Kanji", "field": "Kanji", "required": True},
@@ -154,7 +154,7 @@ class EditTab(ui.element):
                     ).classes("w-full vocab-table")
 
         return None
-    
+
     # function to show selected rows as individual rows below table
     def render_inputs(self, selected: list) -> bool:
         print(selected)
@@ -206,7 +206,7 @@ class EditTab(ui.element):
                     }
 
         return True
-    
+
     # function to send item information to the app
     def edit_selected_items(self) -> None:
         self.add_spinner.visible = True

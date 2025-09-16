@@ -2,7 +2,7 @@ import re
 
 from nicegui import ui
 from nicegui.events import KeyEventArguments
-from pyokaka import okaka # maybe consider romkan?
+from pyokaka import okaka
 from rapidfuzz import process, fuzz
 
 
@@ -14,11 +14,11 @@ class ReviewTab(ui.element):
 
         # define the proper alphabet for review entry
         self.alphabet = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?-"
-        
+ 
         # define a few global variables
         self.correct_message = "✅"
         self.incorrect_message = "❌"
-        
+
         # buffer for review text entry
         self.text_buffer = ""
         self.kana_output = ""
@@ -28,23 +28,23 @@ class ReviewTab(ui.element):
 
         # contents
         self.review_card = ui.card().classes("card-container")
-    
+
         with self.review_card:
-    
+
             # set up how the review card looks
             self.review_header = ui.label("Deck").classes("text-white")
             self.start_button = ui.button("Start Review", color = "primary", on_click = lambda: self.start_review())
             self.review_progress = ui.label("").classes("text-white")
             self.reading_display = ui.label("").classes("japanese-main-text text-center q-py-xl text-white")
-    
+
             self.review_separator = ui.separator()
 
             # bind the keyboard to whenever user romaji is visible
             self.user_romaji = ui.label("").classes("text-white") #.bind_visibility_to(self.keyboard, "active")
             self.user_hiragana = ui.label("").classes("japanese-main-text text-white")
-    
+
             self.res_display = ui.label("").classes("japanese-main-text text-white")
-    
+
             self.correct_reading_display = ui.label("").classes("japanese-main-text text-white")
             self.correct_meaning_display = ui.label("").classes("main-text text-white")
 
@@ -290,13 +290,13 @@ class ReviewTab(ui.element):
                 case "reading":
                     self.kana_output = okaka.convert(self.text_buffer)
                     self.user_hiragana.text = self.kana_output
-    
+
                 case "meaning":
                     self.user_hiragana.text = self.text_buffer
-    
+
             self.kana_output = okaka.convert(self.text_buffer)
             self.user_romaji.text = self.text_buffer
-    
+
             # in the event of bugfixing/logging, printing res might be useful
             return res
 
