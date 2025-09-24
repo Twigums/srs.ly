@@ -11,7 +11,7 @@ entries_before_commit = 10
 # path to sqlite databases
 # srs_db contains user data
 # full_db contains dictionary data
-path_to_srs_db = "./db/empty_test.db"
+path_to_srs_db = "./db/srs.db"
 path_to_full_db = "./db/KanjiDatabase.sqlite"
 
 # debug mode
@@ -30,7 +30,7 @@ debug_mode = false
 5 = { value = 14, unit = "days" }
 6 = { value = 30, unit = "days" }
 7 = { value = 120, unit = "days" }
-8 = -1 # stop reviewing
+8 = { value = -1, unit = "none" } # stop reviewing
 
 # keybindings
 [keybinds]

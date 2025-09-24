@@ -1,11 +1,13 @@
 from nicegui import ui
 
+from src.dataclasses import AppConfig
+
 
 class MainTab(ui.element):
-    def __init__(self, srs_app):
+    def __init__(self, config):
         super().__init__()
 
-        self.srs_app = srs_app
+        self.srs_app = config.srs_app
 
         self.main_page_grid = ui.grid(columns = 2).classes("gap-4")
         self.refresh_timer = ui.timer(interval = 60.0, callback = lambda: self.load_stats())

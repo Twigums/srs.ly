@@ -2,12 +2,14 @@ import pandas as pd
 
 from nicegui import ui
 
+from src.dataclasses import AppConfig
+
 
 class EditTab(ui.element):
-    def __init__(self, srs_app):
+    def __init__(self, config):
         super().__init__()
 
-        self.srs_app = srs_app
+        self.srs_app = config.srs_app
 
         # dictionary to store selected item information
         # this is important for sending information back to the app
@@ -157,7 +159,6 @@ class EditTab(ui.element):
 
     # function to show selected rows as individual rows below table
     def render_inputs(self, selected: list) -> bool:
-        print(selected)
         self.input_container.clear()
         self.selected_items.clear()
 

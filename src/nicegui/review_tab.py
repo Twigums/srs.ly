@@ -5,12 +5,16 @@ from nicegui.events import KeyEventArguments
 from pyokaka import okaka
 from rapidfuzz import process, fuzz
 
+from src.dataclasses import AppConfig
 
 class ReviewTab(ui.element):
-    def __init__(self, srs_app):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
-        self.srs_app = srs_app
+        self.srs_app = config.srs_app
+        self.key_ignore_answer = config.keybinds["ignore_answer"]
+        self.key_add_as_valid_response = config.keybinds["add_as_valid_response"]
+        self.key_quit_after_current_set = config.keybinds["quit_after_current_set"][-1]
 
         # define the proper alphabet for review entry
         self.alphabet = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?-"
@@ -48,7 +52,7 @@ class ReviewTab(ui.element):
             self.correct_reading_display = ui.label("").classes("japanese-main-text text-white")
             self.correct_meaning_display = ui.label("").classes("main-text text-white")
 
-            if self.srs_app.debug_mode == False:
+            if config.debug_mode == False:
                 self.user_romaji.visible = False
                 
             self.review_progress.visible = False
@@ -190,7 +194,7 @@ class ReviewTab(ui.element):
 
                 # if the user clicks the "ignore answer key" after the incorrect message is shown:
                 # they acknowledge they made a mistake and would like to try again
-                case self.srs_app.key_ignore_answer if self.res_display.text == self.incorrect_message:
+                case self.key_ignore_answer if self.res_display.text == self.incorrect_message:
                     self.process_answer(self.user_hiragana.text)
 
                     self.res_display.text = ""
@@ -203,7 +207,7 @@ class ReviewTab(ui.element):
 
                 # if the user clicks the "add as valid response" key after the incorrect message is shown:
                 # the user wants to add what they typed as an additional meaning and acknowledges they got the card correct
-                case self.srs_app.key_add_as_valid_response if len(self.text_buffer) > 0 and self.res_display.text == self.incorrect_message:
+                case self.key_add_as_valid_response if len(self.text_buffer) > 0 and self.res_display.text == self.incorrect_message:
                     self.srs_app.add_valid_response(self.user_hiragana.text, self.current_item)
                     self.srs_app.current_reviews.pop(self.srs_app.current_index)
                     self.item_dict[item_id].append(1)
@@ -232,7 +236,7 @@ class ReviewTab(ui.element):
 
                 # if the user clicks the "quit after current set" key (with ctrl):
                 # the user wants to stop reviewing after the current set is completed
-                case self.srs_app.key_quit_after_current_set if e.modifiers.ctrl:
+                case self.key_quit_after_current_set if e.modifiers.ctrl:
                     ui.notify("Will quit after the remaining items are completed.")
                     self.srs_app.stop_updating_review = True
 

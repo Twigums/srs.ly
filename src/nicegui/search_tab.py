@@ -8,14 +8,15 @@ from nicegui import ui, events
 from nicegui.events import KeyEventArguments, MouseEventArguments
 from PIL import Image
 
+from src.dataclasses import AppConfig
 
 # idea from https://www.reddit.com/r/nicegui/comments/1g21jtp/uiinteractive_creating_a_drawing_canvas_that/
 # i only use mouse anyways, so this shouldnt be an issue
 class SearchTab(ui.element):
-    def __init__(self, srs_app):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
-        self.srs_app = srs_app
+        self.srs_app = config.srs_app
 
         self.vision_client = None
 

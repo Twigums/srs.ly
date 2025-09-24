@@ -3,12 +3,13 @@ import tomlkit
 from nicegui import app, ui
 from nicegui.events import ValueChangeEventArguments
 
+from src.dataclasses import AppConfig
 
 class OptionsTab(ui.element):
-    def __init__(self, srs_app):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
-        self.srs_app = srs_app
+        self.srs_app = config.srs_app
 
         with open("config.toml", "r") as f:
             self.config = tomlkit.parse(f.read())

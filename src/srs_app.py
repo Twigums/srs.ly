@@ -1,12 +1,12 @@
 import pandas as pd
 import sqlite3
 import random
-import tomllib
 
 from datetime import datetime, timedelta, timezone
 from functools import wraps
-from pandas.core.frame import DataFrame
 
+from pandas.core.frame import DataFrame
+from src.dataclasses import SrsConfig
 
 # decorator to handle if db connection is not established
 # returns None if no connection
@@ -26,12 +26,7 @@ def check_conn(f):
     return wrapper
 
 class SrsApp:
-    def __init__(self):
-
-        # config file is located here
-        # saved as a toml file
-        with open("config.toml", "rb") as f:
-            config = tomllib.load(f)
+    def __init__(self, config: SrsConfig):
 
         # relevant column name as a dictionary
         self.col_dict = {
@@ -48,20 +43,13 @@ class SrsApp:
             "houhou_suspension_col": "SuspensionDate",
         }
 
-        # set initial definitions from toml file
-        self.debug_mode = config["debug_mode"]
-        self.max_reviews_at_once = config["max_reviews_at_once"]
-        self.entries_before_commit = config["entries_before_commit"]
-        self.match_score_threshold = config["match_score_threshold"]
-        self.srs_interval = config["srs_interval"]
-        self.path_to_srs_db = config["path_to_srs_db"]
-        self.path_to_full_db = config["path_to_full_db"]
-
-        # keybindings
-        self.keybinds = config["keybinds"]
-        self.key_ignore_answer = self.keybinds["ignore_answer"]
-        self.key_add_as_valid_response = self.keybinds["add_as_valid_response"]
-        self.key_quit_after_current_set = self.keybinds["quit_after_current_set"].split(",")[-1]
+        # set initial definitions from dataclass
+        self.max_reviews_at_once = config.max_reviews_at_once
+        self.entries_before_commit = config.entries_before_commit
+        self.match_score_threshold = config.match_score_threshold
+        self.srs_interval = config.srs_interval
+        self.path_to_srs_db = config.path_to_srs_db
+        self.path_to_full_db = config.path_to_full_db
 
         # variables shared between app and ui
         self.id_srs_db = "srs_db"
@@ -342,7 +330,7 @@ class SrsApp:
                 SELECT * FROM {self.name_srs_table}
                 WHERE {self.col_dict["id_col"]} = {current_id};
                 """
-    
+ 
             df = pd.read_sql_query(q, self.conn)
             item = df.to_dict("records")
             self.add_to_review(item)
@@ -500,7 +488,7 @@ class SrsApp:
 
         # if -1, then the user has proved that they know this item well enough to stop reviewing
         # otherwise, use the toml to determine when the next review date is
-        match current_grade_dict:
+        match current_grade_dict["value"]:
             case -1:
                 review_time = None
 

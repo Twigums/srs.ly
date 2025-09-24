@@ -1,8 +1,9 @@
+import tomllib
+
 from nicegui import ui, app
-from dataclasses import dataclass
-from typing import Optional
 
 from src.srs_app import SrsApp
+from src.dataclasses import AppConfig, SrsConfig
 from src.nicegui.main_tab import MainTab
 from src.nicegui.review_tab import ReviewTab
 from src.nicegui.add_tab import AddTab
@@ -10,18 +11,6 @@ from src.nicegui.edit_tab import EditTab
 from src.nicegui.search_tab import SearchTab
 from src.nicegui.options_tab import OptionsTab
 
-
-# init config
-@dataclass
-class AppConfig:
-
-    # check if user is using mobile or not
-    is_mobile: bool = False
-
-    srs_app: Optional[object] = None
-    ui_port: int = 8080
-    ui_web_title: str = "srs.ly"
-    ui_storage_secret: str = "test"
 
 def check_device(config: AppConfig) -> None:
     res = ui.context.client.request.headers["user-agent"]
@@ -113,51 +102,68 @@ def create_page(config: AppConfig) -> None:
         # definitions for the main tab
         # we should show stats and refresh it automatically!
         with ui.tab_panel(main_tab):
-            MainTab(config.srs_app)
+            MainTab(config)
 
         # srs review tab to show review cards one by one
         with ui.tab_panel(review_tab):
-            ReviewTab(config.srs_app)
+            ReviewTab(config)
 
         # add items tab
         with ui.tab_panel(add_tab):
-            AddTab(config.srs_app)
+            AddTab(config)
 
         # edit items
         with ui.tab_panel(edit_tab):
-            EditTab(config.srs_app)
+            EditTab(config)
 
         # draw and search
         with ui.tab_panel(search_tab):
-            SearchTab(config.srs_app)
+            SearchTab(config)
 
         # options tab
         with ui.tab_panel(options_tab):
-            OptionsTab(config.srs_app)
+            OptionsTab(config)
 
     return None
 
 def main():
-    srs_app = SrsApp()
+    with open("config.toml", "rb") as f:
+        config = tomllib.load(f)
+
+    config_srs = SrsConfig(
+        srs_interval = config["srs_interval"],
+        path_to_srs_db = config["path_to_srs_db"],
+        path_to_full_db = config["path_to_full_db"],
+        max_reviews_at_once = config["max_reviews_at_once"],
+        entries_before_commit = config["entries_before_commit"],
+        match_score_threshold = config["match_score_threshold"]
+    )
+
+    srs_app = SrsApp(config_srs)
     srs_app.init_db()
 
-    config = AppConfig(srs_app = srs_app)
-    app.on_connect(lambda: check_device(config))
+    config_app = AppConfig(
+        srs_app = srs_app,
+        debug_mode = config["debug_mode"],
+        keybinds = config["keybinds"]
+    )
+
+    app.on_connect(lambda: check_device(config_app))
 
     @ui.page("/")
     def index() -> None:
-        create_page(config)
+        create_page(config_app)
 
     # for the sake of testing, be able to change port to whatever
     import sys
 
     if len(sys.argv) == 2:
-        config.ui_port = int(sys.argv[1])
+        config_app.ui_port = int(sys.argv[1])
 
     # serve site
-    ui.run(port = config.ui_port,
-           title = config.ui_web_title,
-           storage_secret = config.ui_storage_secret
+    ui.run(port = config_app.ui_port,
+           title = config_app.ui_web_title,
+           storage_secret = config_app.ui_storage_secret
     )
 
 # start serving the site

@@ -2,6 +2,8 @@ import pandas as pd
 
 from nicegui import ui
 
+from src.dataclasses import AppConfig
+
 
 # helper function to bfill, but for some reason there are funny "" or " " in the df?
 # so this works better than bfill :(
@@ -17,10 +19,10 @@ def first_valid(row: pd.core.series.Series) -> str | int | float | None:
     return None
 
 class AddTab(ui.element):
-    def __init__(self, srs_app):
+    def __init__(self, config):
         super().__init__()
 
-        self.srs_app = srs_app
+        self.srs_app = config.srs_app
 
         # dictionary to store selected item information
         # this is important for sending information back to the app
