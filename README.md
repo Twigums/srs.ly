@@ -25,3 +25,6 @@ Configurations are stored in the `config.toml` file, and all the variables shoul
 Data is stored in `./db`, and `KanjiDatabase.sqlite` contains a static copy of dictionary information. `SrsDatabase.sqlite` is the dynamic, user data that will change on updates. Lastly, `empty_test.db` is a very small database that contains a few rows for testing and implementation purposes.
 
 The database file names and naming schemes are directly from Houhou SRS. In the future, I might choose to restructure the datasets to suit my needs better.
+
+### Known Issues:
+If you run into `OSError: no library called "cairo-2" was found`: Install `libcairo2`.
