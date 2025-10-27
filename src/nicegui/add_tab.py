@@ -192,7 +192,7 @@ class AddTab(ui.element):
                             "Readings": row["Readings"],
                             "Meanings": ",".join([meaning.strip() for meaning in row["Meanings"].split(";")]),
                             "IsCommon": "✅" if row["IsCommon"] else "❌",
-                            "JLPT": f"N{row["JLPT"]}" if not pd.isna(row["JLPT"]) else "",
+                            "JLPT": f"N{row['JLPT']}" if not pd.isna(row["JLPT"]) else "",
                             "Wanikani": row.get("Wanikani", None),
                             "Frequency Rank": row.get("Frequency Rank", None),
                             "Wiki Rank": row.get("Wiki Rank", None),
@@ -272,7 +272,7 @@ class AddTab(ui.element):
                                         ui.label("Nanori:")
                                         ui.label(item["nanori"])
                                 case "vocab":
-                                    ui.label(f"Vocab has tags: {item["Tags"]}")
+                                    ui.label(f"Vocab has tags: {item['Tags']}")
 
                             kanji_input = ui.input("Kanji", value = item["Kanji"])
                             readings_input = ui.input("Readings", value = item["Readings"])

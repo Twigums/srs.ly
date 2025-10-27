@@ -129,9 +129,11 @@ class SrsApp:
     def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame]:
         max_srs_grade = max(int(x) for x in self.srs_interval.keys())
 
+        expected_values = "\n".join([f"SELECT {i} UNION ALL" for i in range(max_srs_grade)])
+
         q_current_grade_count = f"""
                                 WITH expected(val) AS (
-                                    {"\n".join([f"SELECT {i} UNION ALL" for i in range(max_srs_grade)])}
+                                    {expected_values}
                                     SELECT {max_srs_grade}
                                 )
                                 SELECT expected.val AS val,
