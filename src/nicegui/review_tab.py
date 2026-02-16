@@ -202,6 +202,7 @@ class ReviewTab(ui.element):
 
                     self.clean_card()
 
+
                     return "ignore result"
 
                 # if the user clicks the "add as valid response" key after the incorrect message is shown:
@@ -332,9 +333,7 @@ class ReviewTab(ui.element):
                     reading_stripped = reading.strip()
                     lookup_readings[reading_stripped] = reading
 
-                all_valid_readings = list(lookup_readings.keys())
-
-                if answer_stripped in all_valid_readings:
+                if answer_stripped in lookup_readings:
                     matching_score = 100
                     matching_reading = answer_stripped
 
@@ -357,8 +356,7 @@ class ReviewTab(ui.element):
                     lookup_readings[strip_parentheses] = reading
                     lookup_readings[remove_all_in_parentheses] = reading
 
-                all_valid_readings = list(lookup_readings.keys())
-                matching_reading, matching_score, _ = process.extractOne(answer_lower, all_valid_readings, scorer = fuzz.QRatio)
+                matching_reading, matching_score, _ = process.extractOne(answer_lower, lookup_readings.keys(), scorer = fuzz.QRatio)
 
         self.correct_reading_display.text = str(valid_readings)
         self.correct_reading_display.visible = True
@@ -366,16 +364,18 @@ class ReviewTab(ui.element):
 
         # if the score is over a certain threshold, then we mark it as correct
         # otherwise, it's incorrect
+        current_review = self.srs_app.current_reviews.pop(self.srs_app.current_index)
         to_append = 0
         if matching_score > self.srs_app.match_score_threshold:
             to_append = 1
             self.res_display.text = self.correct_message
-            self.srs_app.current_reviews.pop(self.srs_app.current_index)
 
         else:
+            self.srs_app.current_reviews.append(current_review)
             self.res_display.text = self.incorrect_message
 
-        if self.res_display.text == self.correct_message or will_submit:
+        # only submit if we're ready to submit or if the user got it correct
+        if to_append == 1 or will_submit:
             self.item_dict[item_id].append(to_append)
             
             # my way of marking if both the reading and meaning cards are marked as correct
