@@ -1,12 +1,11 @@
 import sqlite3
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import patch
 
 from src.dataclasses import SrsConfig
 from src.srs_app import SrsApp, check_conn
 
-from tests.conftest import insert_srs_item, make_nicegui_item, TEST_SRS_INTERVAL
+from tests.conftest import insert_srs_item, TEST_SRS_INTERVAL
 
 
 # ---------------------------------------------------------------------------
@@ -420,3 +419,4 @@ class TestGetReviewStats:
         # SUM() on an empty table returns NULL → ratio is None, not 0
         _, _, df_ratio, _ = srs_app.get_review_stats()
         assert df_ratio.values.item() is None
+

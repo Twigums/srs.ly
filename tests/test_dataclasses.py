@@ -9,19 +9,11 @@ class TestColors:
     def test_default_kanji_color(self):
         assert Colors().kanji == (46, 103, 255)
 
-    def test_progress_has_five_entries(self):
-        assert len(Colors().progress) == 5
+    def test_kana_color(self):
+        assert Colors().kana == (57, 57, 57)
 
-    def test_progress_entries_are_rgb_tuples(self):
-        for entry in Colors().progress:
-            assert len(entry) == 3
-            assert all(0 <= v <= 255 for v in entry)
-
-    def test_independent_instances_do_not_share_progress(self):
-        c1 = Colors()
-        c2 = Colors()
-        c1.progress.append((0, 0, 0))
-        assert len(c2.progress) == 5
+    def test_romaji_color(self):
+        assert Colors().romaji == (228, 228, 228)
 
 
 class TestBotConfig:
