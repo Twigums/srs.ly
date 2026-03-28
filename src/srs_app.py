@@ -128,7 +128,7 @@ class SrsApp:
 
     # retrieve counts and ratio from db
     @check_conn
-    def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame]:
+    def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame, int]:
         max_srs_grade = max(int(x) for x in self.srs_interval.keys())
 
         expected_values = "\n".join([f"SELECT {i} UNION ALL" for i in range(max_srs_grade)])
@@ -153,7 +153,7 @@ class SrsApp:
                                """
 
         q_sucess_ratio = f"""
-                         SELECT 
+                         SELECT
                              CASE
                              WHEN (SUM({self.col_dict["failure_col"]}) + SUM({self.col_dict["success_col"]})) = 0 THEN 0
                              ELSE SUM({self.col_dict["success_col"]}) * 1.0 / (SUM({self.col_dict["failure_col"]}) + SUM({self.col_dict["success_col"]}))
@@ -161,11 +161,17 @@ class SrsApp:
                          FROM srs_db.SrsEntrySet
                          """
 
+        q_due_now_count = f"""
+                          SELECT COUNT(*) FROM {self.name_srs_table}
+                          WHERE {self.col_dict["date_col"]} < current_timestamp;
+                          """
+
         df_grade_counts = pd.read_sql_query(q_current_grade_count, self.conn)
         df_today_counts = pd.read_sql_query(q_today_review_count, self.conn)
         df_ratio = pd.read_sql_query(q_sucess_ratio, self.conn)
+        due_now_count = self.conn.execute(q_due_now_count).fetchone()[0]
 
-        return df_grade_counts, df_today_counts, df_ratio
+        return df_grade_counts, df_today_counts, df_ratio, due_now_count
 
     # returns info on current item
     @check_conn

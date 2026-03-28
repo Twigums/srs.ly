@@ -451,43 +451,46 @@ class Bot:
         @self.bot.slash_command(name = "stats", description = "Show stats of current deck.")
         async def show_stats(ctx: commands.Context) -> None:
 
+            # defer immediately — Discord requires a response within 3 seconds
+            await ctx.defer()
+
             # im not gonna make these a config...
             # there are 5 different "levels" old wanikani and houhou have
             level_names = ["Discovering", "Committing", "Bolstering", "Assimilating", "Set in Stone"]
             level_grades = [[0, 1], [2, 3], [4, 5], [6, 7], [8]]
 
-            df_grade_counts, df_today_counts, df_ratio = self.srs_app.get_review_stats()
+            df_grade_counts, df_today_counts, df_ratio, due_now_count = self.srs_app.get_review_stats()
             grade_values = df_grade_counts.iloc[:, -1].tolist()
 
-            df_reviews = self.srs_app.get_due_reviews()
-
             if grade_values == []:
-                await ctx.respond("Start adding items and reviewing to see stats!")
+                await ctx.followup.send("Start adding items and reviewing to see stats!")
 
                 return None
 
-            # to prevent "failed interaction" when using slash commands
-            await ctx.defer()
-
-            for name, color, grades in zip(level_names, self.colors.progress, level_grades):
-                embed = discord.Embed(
-                    title = name,
-                    description = sum([grade_values[grade] for grade in grades]),
-                    color = discord.Color.from_rgb(color[0], color[1], color[2])
-                )
-
-                await ctx.send(embed = embed)
+            ratio = df_ratio.values.item() or 0.0
 
             embed = discord.Embed(
-                title = "# of Reviews Due",
-                description = f"{len(df_reviews)} / {df_today_counts.values[0][0]}",
+                title = "Stats",
                 color = discord.Color.from_rgb(55, 55, 62) # discord's ash embed
             )
 
-            ratio = df_ratio.values.item()
-            embed.set_footer(text = f"So far, you got {(ratio * 100):.2f} correct.")
+            for name, grades in zip(level_names, level_grades):
+                count = sum([grade_values[grade] for grade in grades])
+                embed.add_field(
+                    name = name,
+                    value = str(count),
+                    # inline = False,
+                )
 
-            await ctx.send(embed = embed)
+            embed.add_field(
+                name = "Reviews Due",
+                value = f"{due_now_count} / {df_today_counts.values[0][0]}",
+                inline = False,
+            )
+
+            embed.set_footer(text = f"So far, you got {(ratio * 100):.2f}% correct.")
+
+            await ctx.followup.send(embed = embed)
 
             return None
 

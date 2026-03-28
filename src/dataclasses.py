@@ -48,11 +48,6 @@ class Colors:
     kana: Tuple[int, int, int] = (57, 57, 57)      # dark gray
     romaji: Tuple[int, int, int] = (228, 228, 228) # light gray
 
-    # list of 5 progressively more greens for stats
-    progress: List[Tuple[int, int, int]] = field(default_factory=lambda: [
-        (207, 250, 209), (159, 246, 163), (111, 241, 118), (63, 237, 72), (15, 232, 26)
-    ])
-
 # card type used during Discord bot review sessions
 class Card:
     review_type: Optional[str] = None

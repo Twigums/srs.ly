@@ -382,3 +382,41 @@ class TestGetStudyKanji:
         # previously raised NameError: name 'kanji_col' is not defined
         result = srs_app.get_study_kanji()
         assert "食" in result
+
+
+# ---------------------------------------------------------------------------
+# get_review_stats
+# ---------------------------------------------------------------------------
+
+class TestGetReviewStats:
+    def test_returns_four_tuple(self, srs_app):
+        result = srs_app.get_review_stats()
+        assert len(result) == 4
+
+    def test_due_now_count_is_zero_on_empty_table(self, srs_app):
+        _, _, _, due_now = srs_app.get_review_stats()
+        assert due_now == 0
+
+    def test_due_now_count_reflects_overdue_items(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        insert_srs_item(conn, associated_vocab="食べる",
+                        next_answer_date="2000-01-01 00:00:00")
+        insert_srs_item(conn, associated_vocab="飲む",
+                        next_answer_date="2000-01-01 00:00:00")
+        insert_srs_item(conn, associated_vocab="寝る",
+                        next_answer_date="2099-01-01 00:00:00")  # not due yet
+        conn.close()
+
+        _, _, _, due_now = srs_app.get_review_stats()
+        assert due_now == 2
+
+    def test_grade_counts_df_has_one_row_per_grade(self, srs_app):
+        df_grade_counts, _, _, _ = srs_app.get_review_stats()
+        # config has grades 0-8 → 9 rows
+        assert len(df_grade_counts) == 9
+
+    def test_ratio_is_none_with_no_reviews(self, srs_app):
+        # SUM() on an empty table returns NULL → ratio is None, not 0
+        _, _, df_ratio, _ = srs_app.get_review_stats()
+        assert df_ratio.values.item() is None
