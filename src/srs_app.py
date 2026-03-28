@@ -219,7 +219,7 @@ class SrsApp:
         df = pd.read_sql_query(q, self.conn)
 
         vocab_kanjis = set(df[self.col_dict["vocab_col"]].dropna())
-        kanji_kanjis = set(df[kanji_col].dropna())
+        kanji_kanjis = set(df[self.col_dict["kanji_col"]].dropna())
 
         all_kanjis = vocab_kanjis.union(kanji_kanjis)
 
