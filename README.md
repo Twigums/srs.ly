@@ -30,6 +30,9 @@ Data is stored in `./db`, and `KanjiDatabase.sqlite` contains a static copy of d
 
 The database file names and naming schemes are directly from Houhou SRS. In the future, I might choose to restructure the datasets to suit my needs better.
 
+### Known Issues:
+If you run into `OSError: no library called "cairo-2" was found`: Install `libcairo2`.
+
 ## Discord Bot
 
 The Discord bot runs in the same process as the web UI and shares the same database connection, so changes made via the web UI are immediately visible in Discord without restarting.
