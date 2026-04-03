@@ -209,7 +209,7 @@ class ReviewTab(ui.element):
                 # the user wants to add what they typed as an additional meaning and acknowledges they got the card correct
                 case self.key_add_as_valid_response if len(self.text_buffer) > 0 and self.res_display.text == self.incorrect_message:
                     self.srs_app.add_valid_response(self.user_hiragana.text, self.current_item)
-                    self.srs_app.current_reviews.pop(self.srs_app.current_index)
+                    self.srs_app.current_reviews.pop()
                     self.item_dict[item_id].append(1)
 
                     # there has to be a better way of doing this
@@ -230,7 +230,13 @@ class ReviewTab(ui.element):
                     self.correct_reading_display.visible = False
                     self.correct_meaning_display.visible = False
 
-                    self.clean_card()
+                    # current_index past the wrong card. clean_card() would increment it
+                    # again, skipping the next card in the queue (issue #37)
+                    self.text_buffer = ""
+                    self.kana_output = ""
+                    self.user_romaji.text = ""
+                    self.user_hiragana.text = ""
+                    self.update_review_display()
 
                     return "add answer"
 
