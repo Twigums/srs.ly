@@ -70,7 +70,7 @@ class EditTab(ui.element):
         conditions = []
 
         if len(srs_condition) != 0:
-            conditions.append(f"{self.srs_app.col_dict["current_grade_col"]} IN ({srs_condition})")
+            conditions.append(f"{self.srs_app.col_dict['current_grade_col']} IN ({srs_condition})")
 
         if meaning_condition not in ["", None]:
             conditions.append(f"',' || Meanings || ',' LIKE '%,{meaning_condition},%'")

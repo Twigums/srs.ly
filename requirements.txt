@@ -45,6 +45,7 @@ numpy==2.2.5
 orjson==3.10.18
 pandas==2.2.3
 pillow==11.3.0
+py-cord==2.6.1
 propcache==0.3.1
 proto-plus==1.26.1
 protobuf==6.31.1

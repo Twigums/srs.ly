@@ -1,9 +1,12 @@
+import asyncio
+import os
 import tomllib
 
 from nicegui import ui, app
 
 from src.srs_app import SrsApp
-from src.dataclasses import AppConfig, SrsConfig
+from src.dataclasses import AppConfig, BotConfig, Colors, SrsConfig
+from src.discord_bot import Bot
 from src.nicegui.main_tab import MainTab
 from src.nicegui.review_tab import ReviewTab
 from src.nicegui.add_tab import AddTab
@@ -147,6 +150,30 @@ def main():
         debug_mode = config["debug_mode"],
         keybinds = config["keybinds"]
     )
+
+    # set up Discord bot using the same srs_app instance
+    discord_bot = None
+    token_env = config["discord"]["token_env"]
+    token = os.getenv(token_env)
+
+    if token:
+        config_bot = BotConfig(
+            srs_app = srs_app,
+            token = token,
+            prefix = config["discord"]["command_prefix"],
+        )
+        discord_bot = Bot(config_bot, Colors())
+
+        @app.on_startup
+        async def start_discord() -> None:
+            asyncio.create_task(discord_bot.start_async())
+
+        @app.on_shutdown
+        async def stop_discord() -> None:
+            await discord_bot.bot.close()
+
+    else:
+        print(f"Discord token not found in env var '{token_env}'. Running without Discord bot.")
 
     app.on_connect(lambda: check_device(config_app))
 

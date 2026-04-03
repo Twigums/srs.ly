@@ -172,7 +172,7 @@ class ReviewTab(ui.element):
                 # if the user clicks the enter button after the incorrect message is shown:
                 # they acknowledge they got the card incorrect
                 case "Enter" if self.res_display.text == self.incorrect_message:
-                    self.process_answer(self.user_hiragana.text)
+                    self.process_answer(self.user_hiragana.text, will_submit = True)
 
                     self.res_display.text = ""
                     self.correct_reading_display.visible = False
@@ -185,7 +185,7 @@ class ReviewTab(ui.element):
                 # if the user clicks the enter button while the text butter has something in it:
                 # the user is trying to submit their answer for checking
                 case "Enter" if len(self.text_buffer) > 0:
-                    self.process_answer(self.user_hiragana.text)
+                    self.process_answer(self.user_hiragana.text, will_submit = False)
 
                     if self.res_display.text != self.incorrect_message:
                         self.clean_card()
@@ -195,7 +195,6 @@ class ReviewTab(ui.element):
                 # if the user clicks the "ignore answer key" after the incorrect message is shown:
                 # they acknowledge they made a mistake and would like to try again
                 case self.key_ignore_answer if self.res_display.text == self.incorrect_message:
-                    self.process_answer(self.user_hiragana.text)
 
                     self.res_display.text = ""
                     self.correct_reading_display.visible = False
@@ -203,13 +202,14 @@ class ReviewTab(ui.element):
 
                     self.clean_card()
 
+
                     return "ignore result"
 
                 # if the user clicks the "add as valid response" key after the incorrect message is shown:
                 # the user wants to add what they typed as an additional meaning and acknowledges they got the card correct
                 case self.key_add_as_valid_response if len(self.text_buffer) > 0 and self.res_display.text == self.incorrect_message:
                     self.srs_app.add_valid_response(self.user_hiragana.text, self.current_item)
-                    self.srs_app.current_reviews.pop(self.srs_app.current_index)
+                    self.srs_app.current_reviews.pop()
                     self.item_dict[item_id].append(1)
 
                     # there has to be a better way of doing this
@@ -230,7 +230,13 @@ class ReviewTab(ui.element):
                     self.correct_reading_display.visible = False
                     self.correct_meaning_display.visible = False
 
-                    self.clean_card()
+                    # current_index past the wrong card. clean_card() would increment it
+                    # again, skipping the next card in the queue (issue #37)
+                    self.text_buffer = ""
+                    self.kana_output = ""
+                    self.user_romaji.text = ""
+                    self.user_hiragana.text = ""
+                    self.update_review_display()
 
                     return "add answer"
 
@@ -307,7 +313,7 @@ class ReviewTab(ui.element):
         return None
 
     # function to process an answer and calls the app to save the information
-    def process_answer(self, answer) -> None:
+    def process_answer(self, answer, will_submit) -> None:
         item_id = self.current_item["ID"]
         card_type = self.current_item["card_type"]
 
@@ -333,9 +339,7 @@ class ReviewTab(ui.element):
                     reading_stripped = reading.strip()
                     lookup_readings[reading_stripped] = reading
 
-                all_valid_readings = list(lookup_readings.keys())
-
-                if answer_stripped in all_valid_readings:
+                if answer_stripped in lookup_readings:
                     matching_score = 100
                     matching_reading = answer_stripped
 
@@ -358,8 +362,7 @@ class ReviewTab(ui.element):
                     lookup_readings[strip_parentheses] = reading
                     lookup_readings[remove_all_in_parentheses] = reading
 
-                all_valid_readings = list(lookup_readings.keys())
-                matching_reading, matching_score, _ = process.extractOne(answer_lower, all_valid_readings, scorer = fuzz.QRatio)
+                matching_reading, matching_score, _ = process.extractOne(answer_lower, lookup_readings.keys(), scorer = fuzz.QRatio)
 
         self.correct_reading_display.text = str(valid_readings)
         self.correct_reading_display.visible = True
@@ -367,30 +370,35 @@ class ReviewTab(ui.element):
 
         # if the score is over a certain threshold, then we mark it as correct
         # otherwise, it's incorrect
+        current_review = self.srs_app.current_reviews.pop(self.srs_app.current_index)
+        to_append = 0
         if matching_score > self.srs_app.match_score_threshold:
-            self.item_dict[item_id].append(1)
+            to_append = 1
             self.res_display.text = self.correct_message
-            self.srs_app.current_reviews.pop(self.srs_app.current_index)
 
         else:
-            self.item_dict[item_id].append(0)
+            self.srs_app.current_reviews.append(current_review)
             self.res_display.text = self.incorrect_message
 
-        # my way of marking if both the reading and meaning cards are marked as correct
-        # if so, then we should update the review item
-        # if the user gets both correct on the first try, the list would look like [1, 1]
-        # if they can't something wrong: [..., 1, ..., 1], where ... may be any length of 0s
-        # a faster solution is storing a tuple (a, b)
-        # if a = 2, then the user has completed both reviews
-        # b is a counter for how many tries the user has taken
-        if sum(self.item_dict[item_id]) == 2:
-            if len(self.item_dict[item_id]) == 2:
-                self.srs_app.update_review_item(item_id, True)
-
-            else:
-                self.srs_app.update_review_item(item_id, False)
-
-            del self.item_dict[item_id]
-            self.srs_app.update_review_session()
+        # only submit if we're ready to submit or if the user got it correct
+        if to_append == 1 or will_submit:
+            self.item_dict[item_id].append(to_append)
+            
+            # my way of marking if both the reading and meaning cards are marked as correct
+            # if so, then we should update the review item
+            # if the user gets both correct on the first try, the list would look like [1, 1]
+            # if they can't something wrong: [..., 1, ..., 1], where ... may be any length of 0s
+            # a faster solution is storing a tuple (a, b)
+            # if a = 2, then the user has completed both reviews
+            # b is a counter for how many tries the user has taken
+            if sum(self.item_dict[item_id]) == 2:
+                if len(self.item_dict[item_id]) == 2:
+                    self.srs_app.update_review_item(item_id, True)
+    
+                else:
+                    self.srs_app.update_review_item(item_id, False)
+    
+                del self.item_dict[item_id]
+                self.srs_app.update_review_session()
 
         return None

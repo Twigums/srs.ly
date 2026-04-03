@@ -23,7 +23,7 @@ class MainTab(ui.element):
         res = self.srs_app.get_review_stats()
 
         if res:
-            df_grade_counts, df_today_counts, df_ratio = res
+            df_grade_counts, df_today_counts, df_ratio, _ = res
 
         else:
             ui.notify("DB not connected.")

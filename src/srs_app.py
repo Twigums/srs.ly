@@ -77,14 +77,16 @@ class SrsApp:
         # i guess another solution can be retrieving 2 tables using pd and operating on them using pd
         try:
             self.conn = sqlite3.connect(self.path_to_full_db)
+            self.conn.execute("PRAGMA journal_mode = WAL")
+            self.conn.execute("PRAGMA busy_timeout = 30000")
 
         except sqlite3.Error as e:
-            raise f"Conn failed: {e}"
+            raise Exception(f"Conn failed: {e}")
 
             return False
 
         except FileNotFoundError as e:
-            raise "File not found: {e}"
+            raise Exception("File not found: {e}")
 
             return False
 
@@ -126,12 +128,14 @@ class SrsApp:
 
     # retrieve counts and ratio from db
     @check_conn
-    def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame]:
+    def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame, int]:
         max_srs_grade = max(int(x) for x in self.srs_interval.keys())
+
+        expected_values = "\n".join([f"SELECT {i} UNION ALL" for i in range(max_srs_grade)])
 
         q_current_grade_count = f"""
                                 WITH expected(val) AS (
-                                    {"\n".join([f"SELECT {i} UNION ALL" for i in range(max_srs_grade)])}
+                                    {expected_values}
                                     SELECT {max_srs_grade}
                                 )
                                 SELECT expected.val AS val,
@@ -149,7 +153,7 @@ class SrsApp:
                                """
 
         q_sucess_ratio = f"""
-                         SELECT 
+                         SELECT
                              CASE
                              WHEN (SUM({self.col_dict["failure_col"]}) + SUM({self.col_dict["success_col"]})) = 0 THEN 0
                              ELSE SUM({self.col_dict["success_col"]}) * 1.0 / (SUM({self.col_dict["failure_col"]}) + SUM({self.col_dict["success_col"]}))
@@ -157,11 +161,17 @@ class SrsApp:
                          FROM srs_db.SrsEntrySet
                          """
 
+        q_due_now_count = f"""
+                          SELECT COUNT(*) FROM {self.name_srs_table}
+                          WHERE {self.col_dict["date_col"]} < current_timestamp;
+                          """
+
         df_grade_counts = pd.read_sql_query(q_current_grade_count, self.conn)
         df_today_counts = pd.read_sql_query(q_today_review_count, self.conn)
         df_ratio = pd.read_sql_query(q_sucess_ratio, self.conn)
+        due_now_count = self.conn.execute(q_due_now_count).fetchone()[0]
 
-        return df_grade_counts, df_today_counts, df_ratio
+        return df_grade_counts, df_today_counts, df_ratio, due_now_count
 
     # returns info on current item
     @check_conn
@@ -215,7 +225,7 @@ class SrsApp:
         df = pd.read_sql_query(q, self.conn)
 
         vocab_kanjis = set(df[self.col_dict["vocab_col"]].dropna())
-        kanji_kanjis = set(df[kanji_col].dropna())
+        kanji_kanjis = set(df[self.col_dict["kanji_col"]].dropna())
 
         all_kanjis = vocab_kanjis.union(kanji_kanjis)
 
