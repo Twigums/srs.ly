@@ -420,3 +420,128 @@ class TestGetReviewStats:
         _, _, df_ratio, _ = srs_app.get_review_stats()
         assert df_ratio.values.item() is None
 
+
+# ---------------------------------------------------------------------------
+# get_review_stats — timezone-aware today count (utc_offset_minutes)
+# ---------------------------------------------------------------------------
+
+class TestGetReviewStatsTimezone:
+    """
+    Timezone-aware 'today count' tests.  The second value returned by
+    get_review_stats is a DataFrame whose single cell is the count of items
+    whose NextAnswerDateISO falls before end-of-today in the client's timezone.
+    """
+
+    def _today_count(self, srs_app, utc_offset_minutes: int = 0) -> int:
+        _, df_today, _, _ = srs_app.get_review_stats(utc_offset_minutes=utc_offset_minutes)
+        return int(df_today.values[0][0])
+
+    def test_accepts_utc_offset_minutes_parameter(self, srs_app):
+        result = srs_app.get_review_stats(utc_offset_minutes=540)
+        assert len(result) == 4
+
+    def test_far_past_item_counted_for_any_offset(self, srs_app, tmp_dbs):
+        """An item long overdue is in today's count regardless of timezone."""
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        insert_srs_item(conn, associated_vocab="古い",
+                        next_answer_date="1970-01-01 00:00:00")
+        conn.close()
+
+        for offset in [-720, -60, 0, 60, 540, 840]:
+            assert self._today_count(srs_app, offset) >= 1, \
+                f"Far-past item missing at offset {offset}"
+
+    def test_far_future_item_not_counted_for_any_offset(self, srs_app, tmp_dbs):
+        """An item due far in the future is never in today's count."""
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        insert_srs_item(conn, associated_vocab="未来",
+                        next_answer_date="2099-12-31 23:59:59")
+        conn.close()
+
+        for offset in [-720, -60, 0, 60, 540, 840]:
+            assert self._today_count(srs_app, offset) == 0, \
+                f"Far-future item wrongly counted at offset {offset}"
+
+    def test_positive_offset_excludes_items_past_local_midnight(self, srs_app, tmp_dbs):
+        """
+        With a positive UTC offset (east), end-of-today falls earlier in UTC.
+        An item due just after that local-midnight-in-UTC should NOT be counted
+        by the east timezone but SHOULD be counted by UTC.
+        """
+        from datetime import datetime, timezone, timedelta
+
+        utc_offset_minutes = 540  # JST = UTC+9
+
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+
+        # Ask SQLite for the exact end-of-today boundary for both offsets
+        jst_end_str = conn.execute(
+            f"SELECT datetime('now', '+{utc_offset_minutes} minutes',"
+            f" 'start of day', '+1 day', '-1 second', '-{utc_offset_minutes} minutes')"
+        ).fetchone()[0]
+        utc_end_str = conn.execute(
+            "SELECT datetime('now', 'start of day', '+1 day', '-1 second')"
+        ).fetchone()[0]
+
+        jst_end = datetime.fromisoformat(jst_end_str).replace(tzinfo=timezone.utc)
+        utc_end = datetime.fromisoformat(utc_end_str).replace(tzinfo=timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+
+        # Target: 1 minute after JST day ends, still before UTC day ends
+        target = jst_end + timedelta(minutes=1)
+
+        if target >= utc_end or target <= now_utc:
+            pytest.skip(
+                "No valid window between JST and UTC day boundaries at this UTC hour"
+            )
+
+        insert_srs_item(conn, associated_vocab="テスト",
+                        next_answer_date=target.strftime("%Y-%m-%d %H:%M:%S"))
+        conn.close()
+
+        assert self._today_count(srs_app, utc_offset_minutes=0) == 1
+        assert self._today_count(srs_app, utc_offset_minutes=utc_offset_minutes) == 0
+
+    def test_negative_offset_includes_items_before_local_midnight(self, srs_app, tmp_dbs):
+        """
+        With a negative UTC offset (west), end-of-today falls later in UTC.
+        An item due just after UTC midnight but still within the western timezone's
+        'today' should be counted by the west timezone but NOT by UTC.
+        """
+        from datetime import datetime, timezone, timedelta
+
+        utc_offset_minutes = -300  # EST = UTC-5
+
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+
+        utc_end_str = conn.execute(
+            "SELECT datetime('now', 'start of day', '+1 day', '-1 second')"
+        ).fetchone()[0]
+        est_end_str = conn.execute(
+            f"SELECT datetime('now', '{utc_offset_minutes:+d} minutes',"
+            f" 'start of day', '+1 day', '-1 second', '{-utc_offset_minutes:+d} minutes')"
+        ).fetchone()[0]
+
+        utc_end = datetime.fromisoformat(utc_end_str).replace(tzinfo=timezone.utc)
+        est_end = datetime.fromisoformat(est_end_str).replace(tzinfo=timezone.utc)
+        now_utc = datetime.now(timezone.utc)
+
+        # Target: 1 minute after UTC day ends, still within EST's today
+        target = utc_end + timedelta(minutes=1)
+
+        if target >= est_end or target <= now_utc:
+            pytest.skip(
+                "No valid window between UTC and EST day boundaries at this UTC hour"
+            )
+
+        insert_srs_item(conn, associated_vocab="テスト",
+                        next_answer_date=target.strftime("%Y-%m-%d %H:%M:%S"))
+        conn.close()
+
+        assert self._today_count(srs_app, utc_offset_minutes=0) == 0
+        assert self._today_count(srs_app, utc_offset_minutes=utc_offset_minutes) == 1
+

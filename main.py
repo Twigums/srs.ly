@@ -178,8 +178,22 @@ def main():
     app.on_connect(lambda: check_device(config_app))
 
     @ui.page("/")
-    def index() -> None:
+    async def index() -> None:
         create_page(config_app)
+
+        # Detect client timezone after the page is rendered so the WebSocket
+        # is established before we call run_javascript. Default to UTC on timeout.
+        try:
+            await ui.context.client.connected(timeout=5.0)
+
+            js_offset = await ui.run_javascript("-(new Date().getTimezoneOffset())")
+            utc_offset_minutes = max(-720, min(840, int(js_offset or 0)))
+            app.storage.user["utc_offset_minutes"] = utc_offset_minutes
+
+            print(f"Timezone: UTC{utc_offset_minutes / 60}")
+
+        except Exception:
+            app.storage.user.setdefault("utc_offset_minutes", 0)
 
     # for the sake of testing, be able to change port to whatever
     import sys

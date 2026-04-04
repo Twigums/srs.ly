@@ -128,7 +128,7 @@ class SrsApp:
 
     # retrieve counts and ratio from db
     @check_conn
-    def get_review_stats(self) -> tuple[DataFrame, DataFrame, DataFrame, int]:
+    def get_review_stats(self, utc_offset_minutes: int = 0) -> tuple[DataFrame, DataFrame, DataFrame, int]:
         max_srs_grade = max(int(x) for x in self.srs_interval.keys())
 
         expected_values = "\n".join([f"SELECT {i} UNION ALL" for i in range(max_srs_grade)])
@@ -146,10 +146,16 @@ class SrsApp:
                                 ORDER BY expected.val;
                                 """
 
-        # get the end of day today, but in utc! (items are stored using now -> utc time)
+        # Clamp offset to the valid UTC range [-720, 840] (UTC-12 to UTC+14)
+        utc_offset_minutes = max(-720, min(840, int(utc_offset_minutes)))
+        tz_fwd = f"{utc_offset_minutes:+d} minutes"
+        tz_bwd = f"{-utc_offset_minutes:+d} minutes"
+
+        # get the end of day today in the client's timezone, expressed in UTC
+        # (items are stored as UTC timestamps)
         q_today_review_count = f"""
                                SELECT COUNT(*) FROM {self.name_srs_table}
-                               WHERE {self.col_dict["date_col"]} < datetime('now', 'localtime', 'start of day', '+1 day', '-1 second', 'utc');
+                               WHERE {self.col_dict["date_col"]} < datetime('now', '{tz_fwd}', 'start of day', '+1 day', '-1 second', '{tz_bwd}');
                                """
 
         q_sucess_ratio = f"""

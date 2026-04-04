@@ -1,4 +1,4 @@
-from nicegui import ui
+from nicegui import app, ui
 
 from src.dataclasses import AppConfig
 
@@ -20,7 +20,8 @@ class MainTab(ui.element):
     def load_stats(self) -> bool:
         self.main_page_grid.clear()
 
-        res = self.srs_app.get_review_stats()
+        utc_offset_minutes = app.storage.user.get("utc_offset_minutes", 0)
+        res = self.srs_app.get_review_stats(utc_offset_minutes=utc_offset_minutes)
 
         if res:
             df_grade_counts, df_today_counts, df_ratio, _ = res
