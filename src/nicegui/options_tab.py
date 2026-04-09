@@ -5,6 +5,14 @@ from nicegui import app, ui
 from nicegui.events import ValueChangeEventArguments
 
 from src.dataclasses import AppConfig
+from src.review_storage import clear_review_state
+
+
+def handle_refresh(storage: dict) -> None:
+    """Clear the review session state from storage then reload the page."""
+    clear_review_state(storage)
+    ui.navigate.reload()
+
 
 class OptionsTab(ui.element):
     def __init__(self, config: AppConfig):
@@ -35,6 +43,8 @@ class OptionsTab(ui.element):
         ui.separator()
 
         ui.button("Reload page", on_click = ui.navigate.reload)
+
+        ui.button("Refresh", on_click = lambda: handle_refresh(app.storage.user))
 
     # turns on/off backend db depending on switch status
     def set_db_status(self, e: ValueChangeEventArguments) -> bool:

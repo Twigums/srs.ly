@@ -1,11 +1,17 @@
 import re
 
-from nicegui import ui
+from nicegui import app, ui
 from nicegui.events import KeyEventArguments
 from pyokaka import okaka
 from rapidfuzz import process, fuzz
 
 from src.dataclasses import AppConfig
+from src.review_storage import (
+    save_review_state,
+    load_review_state,
+    clear_review_state,
+    has_review_state,
+)
 
 class ReviewTab(ui.element):
     def __init__(self, config: AppConfig):
@@ -54,12 +60,23 @@ class ReviewTab(ui.element):
 
             if config.debug_mode == False:
                 self.user_romaji.visible = False
-                
+
             self.review_progress.visible = False
             self.reading_display.visible = False
             self.review_separator.visible = False
             self.correct_reading_display.visible = False
             self.correct_meaning_display.visible = False
+
+        # Restore any in-progress session from per-user storage so that a
+        # browser/connection refresh does not lose the user's place.
+        if has_review_state(app.storage.user):
+            self.item_dict = {}
+            load_review_state(app.storage.user, self.srs_app, self.item_dict)
+            self.review_header.visible = True
+            self.start_button.visible = False
+            self.reading_display.visible = True
+            self.review_separator.visible = True
+            self.update_review_display()
 
     """
     functions for the review card
@@ -71,6 +88,9 @@ class ReviewTab(ui.element):
 
         # initialize empty vars
         self.item_dict = dict()
+
+        # discard any previously saved session — this is a fresh start
+        clear_review_state(app.storage.user)
 
         match reviews:
             case None:
@@ -112,6 +132,9 @@ class ReviewTab(ui.element):
             self.correct_meaning_display.visible = False
             self.review_card.style("background-color: #26c826")
 
+            # session complete — remove saved state so the next load starts fresh
+            clear_review_state(app.storage.user)
+
             return None
 
         # otherwise, we have an item, so we should find what kind of item it is
@@ -138,6 +161,9 @@ class ReviewTab(ui.element):
         # progress is defined as how many vocab has been completed over how many vocabs are due
         self.review_progress.text = f"{self.srs_app.current_completed} / {self.srs_app.len_review_ids}"
         self.review_progress.visible = True
+
+        # persist the current position so a refresh can resume here
+        save_review_state(app.storage.user, self.srs_app, item_dict=self.item_dict)
 
         return None
 
@@ -383,7 +409,7 @@ class ReviewTab(ui.element):
         # only submit if we're ready to submit or if the user got it correct
         if to_append == 1 or will_submit:
             self.item_dict[item_id].append(to_append)
-            
+
             # my way of marking if both the reading and meaning cards are marked as correct
             # if so, then we should update the review item
             # if the user gets both correct on the first try, the list would look like [1, 1]
@@ -394,11 +420,14 @@ class ReviewTab(ui.element):
             if sum(self.item_dict[item_id]) == 2:
                 if len(self.item_dict[item_id]) == 2:
                     self.srs_app.update_review_item(item_id, True)
-    
+
                 else:
                     self.srs_app.update_review_item(item_id, False)
-    
+
                 del self.item_dict[item_id]
                 self.srs_app.update_review_session()
+
+        # persist item_dict changes so a refresh sees the latest answer progress
+        save_review_state(app.storage.user, self.srs_app, item_dict=self.item_dict)
 
         return None
