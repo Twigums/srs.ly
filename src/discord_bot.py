@@ -447,6 +447,28 @@ class Bot:
 
             return None
 
+        @self.bot.slash_command(name = "refresh", description = "Restart the review session with the latest data.")
+        async def refresh_reviews(ctx: commands.Context) -> None:
+
+            if self.state == AppState.STOPPED:
+                await ctx.respond("No active review session to refresh.")
+                return None
+
+            if not self._start_review():
+                await ctx.respond("No reviews!")
+                return None
+
+            self.state = AppState.RUNNING
+            self._clean_buffer()
+
+            await ctx.respond("Session refreshed!")
+            await ctx.send(f"You have **{self.srs_app.len_review_ids}** reviews due.")
+
+            embed = self.update_embed()
+            await ctx.channel.send(embed = embed)
+
+            return None
+
         # "stats" should show important stats to the user
         @self.bot.slash_command(name = "stats", description = "Show stats of current deck.")
         async def show_stats(ctx: commands.Context) -> None:

@@ -544,4 +544,3 @@ class TestGetReviewStatsTimezone:
 
         assert self._today_count(srs_app, utc_offset_minutes=0) == 0
         assert self._today_count(srs_app, utc_offset_minutes=utc_offset_minutes) == 1
-

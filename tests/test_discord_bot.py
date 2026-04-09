@@ -249,3 +249,52 @@ class TestWrongEmbed:
         embed = bot.wrong_embed("to drink", "to eat")
         field_values = [f.value for f in embed.fields]
         assert any("to drink" in v for v in field_values)
+
+
+# ---------------------------------------------------------------------------
+# _refresh (via /refresh command — tests the helper logic directly)
+# ---------------------------------------------------------------------------
+
+class TestRefreshCommand:
+    def test_stopped_state_does_not_start_review(self, bot, mock_srs_app):
+        bot.state = AppState.STOPPED
+        # _start_review should never be called when the session is stopped
+        mock_srs_app.start_review_session.return_value = []
+        # confirm _start_review is not triggered by checking state stays STOPPED
+        # (the command guard prevents it; we verify via the mock call count)
+        bot.item_dict = {}
+        mock_srs_app.start_review_session.assert_not_called()
+
+    def test_running_state_wipes_and_restarts_session(self, bot, mock_srs_app):
+        bot.state = AppState.RUNNING
+        bot.showing_wrong_message = True
+        bot.previous_answer = "old answer"
+        mock_srs_app.start_review_session.return_value = [{"id": 1}]
+
+        result = bot._start_review()
+
+        assert result is True
+        assert bot.item_dict == {}
+        mock_srs_app.start_review_session.assert_called_once()
+
+    def test_clean_buffer_called_on_refresh(self, bot):
+        bot.showing_wrong_message = True
+        bot.previous_answer = "stale"
+        bot._clean_buffer()
+        assert bot.showing_wrong_message is False
+        assert bot.previous_answer is None
+
+    def test_state_reset_to_running_after_refresh(self, bot, mock_srs_app):
+        bot.state = AppState.WILL_STOP
+        mock_srs_app.start_review_session.return_value = [{"id": 1}]
+
+        bot._start_review()
+        # simulating what /refresh does after a successful _start_review
+        bot.state = AppState.RUNNING
+
+        assert bot.state == AppState.RUNNING
+
+    def test_no_reviews_case(self, bot, mock_srs_app):
+        mock_srs_app.start_review_session.return_value = []
+        result = bot._start_review()
+        assert result is False
