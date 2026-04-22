@@ -49,6 +49,7 @@ class AddTab(ui.element):
 
                 self.kanji_search = ui.input("Kanji").classes("w-64").props("clearable")
                 self.kana_search = ui.input("Kana").classes("w-64").props("clearable")
+                self.meaning_search = ui.input("Meaning").classes("w-64").props("clearable")
 
                 search_button = ui.button("Search",
                                           color = "primary",
@@ -68,6 +69,31 @@ class AddTab(ui.element):
             self.add_button.visible = False
             self.add_spinner.visible = False
 
+        # custom item section
+        self.custom_card = ui.card().classes("card-container")
+        with self.custom_card:
+            ui.label("Add Custom Item").classes("text-h4")
+            ui.label("Add any word directly without searching the database.").classes("text-caption")
+
+            with ui.row():
+                self.custom_type = ui.select(
+                    options = {"vocab": "Vocabulary", "kanji": "Kanji"},
+                    value = "vocab",
+                    label = "Type",
+                ).classes("w-48")
+
+                self.custom_kanji_input = ui.input("Kanji / Word").classes("w-64").props("clearable")
+                self.custom_readings_input = ui.input("Readings").classes("w-64").props("clearable")
+                self.custom_meanings_input = ui.input("Meanings").classes("w-64").props("clearable")
+                self.custom_reading_notes_input = ui.input("Reading Notes").classes("w-64").props("clearable")
+                self.custom_meaning_notes_input = ui.input("Meaning Notes").classes("w-64").props("clearable")
+
+            ui.button(
+                "Add Custom Item",
+                color = "green",
+                on_click = lambda: self.add_custom_item(),
+            )
+
     # updates the selection page every call
     # also resets the containers
     def update_search_results(self) -> None:
@@ -77,21 +103,21 @@ class AddTab(ui.element):
         self.add_button.visible = False
 
         # sql query conditions to filter results
-        jlpt_condition = ",".join([str(val) for val in self.jlpt_levels.value])
+        jlpt_condition = ",".join([str(val) for val in (self.jlpt_levels.value or [])])
         kanji_condition = self.kanji_search.value
         kana_condition = self.kana_search.value
+        meaning_condition = self.meaning_search.value
 
         # empty list to store dfs from kanji and vocab
         list_dfs = []
 
+        selected_types = self.item_type.value or []
+
         # handle kanji
-        if "kanji" in self.item_type.value:
+        if "kanji" in selected_types:
             conditions = []
 
-            if len(jlpt_condition) == 0:
-                conditions.append("k.JlptLevel IN (1, 2, 3, 4, 5)")
-
-            else:
+            if len(jlpt_condition) > 0:
                 conditions.append(f"k.JlptLevel IN ({jlpt_condition})")
 
             if kanji_condition not in ["", None]:
@@ -100,13 +126,11 @@ class AddTab(ui.element):
             if kana_condition not in ["", None]:
                 conditions.append(f"',' || k.OnYomi || ',' LIKE '%,{kana_condition},%'")
 
-            # need to set a base condition if no filters were applied
-            if conditions == []:
-                df_kanji = self.srs_app.discover_new_kanji()
-
-            else:
-                condition = " AND ".join(conditions)
-                df_kanji = self.srs_app.discover_new_kanji(condition = condition)
+            condition = " AND ".join(conditions) if conditions else "1=1"
+            df_kanji = self.srs_app.discover_new_kanji(
+                condition = condition,
+                meaning_search = meaning_condition or None,
+            )
 
             if not df_kanji.empty:
                 display_df_kanji = df_kanji[["Character", "OnYomi", "KunYomi", "Nanori", "Meaning", "JlptLevel", "WkLevel", "MostUsedRank", "NewspaperRank"]].copy()
@@ -132,13 +156,10 @@ class AddTab(ui.element):
                 list_dfs.append(display_df_kanji)
 
         # handle vocab
-        if "vocab" in self.item_type.value:
+        if "vocab" in selected_types:
             conditions = []
 
-            if len(jlpt_condition) == 0:
-                conditions.append("v.JlptLevel IN (1, 2, 3, 4, 5)")
-
-            else:
+            if len(jlpt_condition) > 0:
                 conditions.append(f"v.JlptLevel IN ({jlpt_condition})")
 
             if kanji_condition not in ["", None]:
@@ -147,13 +168,11 @@ class AddTab(ui.element):
             if kana_condition not in ["", None]:
                 conditions.append(f"',' || v.KanaWriting || ',' LIKE '%,{kana_condition},%'")
 
-            # need to set a base condition if no filters were applied
-            if conditions == []:
-                df_vocab = self.srs_app.discover_new_vocab()
-
-            else:
-                condition = " AND ".join(conditions)
-                df_vocab = self.srs_app.discover_new_vocab(condition = condition)
+            condition = " AND ".join(conditions) if conditions else "1=1"
+            df_vocab = self.srs_app.discover_new_vocab(
+                condition = condition,
+                meaning_search = meaning_condition or None,
+            )
 
             if not df_vocab.empty:
                 display_df_vocab = df_vocab[["KanjiWriting", "KanaWriting", "Meaning", "IsCommon", "JlptLevel", "WkLevel", "FrequencyRank", "WikiRank", "ShortName"]].copy()
@@ -304,5 +323,35 @@ class AddTab(ui.element):
         self.add_spinner.visible = False
         self.update_search_results()
         ui.notify("Successfully Added Items!")
+
+        return None
+
+    def add_custom_item(self) -> None:
+        kanji = self.custom_kanji_input.value
+        readings = self.custom_readings_input.value
+        meanings = self.custom_meanings_input.value
+
+        if not kanji or not readings or not meanings:
+            ui.notify("Kanji, Readings, and Meanings are required.", type="warning")
+            return None
+
+        item = {
+            "type": self.custom_type.value,
+            "kanji": self.custom_kanji_input,
+            "readings": self.custom_readings_input,
+            "meanings": self.custom_meanings_input,
+            "reading_notes": self.custom_reading_notes_input,
+            "meaning_notes": self.custom_meaning_notes_input,
+        }
+
+        self.srs_app.add_review_item(item)
+        ui.notify(f"Added custom item: {kanji}")
+
+        # clear inputs after adding
+        self.custom_kanji_input.value = ""
+        self.custom_readings_input.value = ""
+        self.custom_meanings_input.value = ""
+        self.custom_reading_notes_input.value = ""
+        self.custom_meaning_notes_input.value = ""
 
         return None

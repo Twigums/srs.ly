@@ -90,3 +90,43 @@ class TestFilterStudyItems:
     def test_filter_invalid_type_raises(self, srs_app):
         with pytest.raises(Exception):
             srs_app.filter_study_items("invalid_type")
+
+
+# ---------------------------------------------------------------------------
+# add_review_item — custom item (no DB lookup, issue #32 part 2)
+# ---------------------------------------------------------------------------
+
+class TestAddCustomItem:
+    def _fetch_row(self, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM SrsEntrySet").fetchone()
+        conn.close()
+        return dict(row) if row else None
+
+    def test_custom_item_stores_meaning_and_reading_notes(self, srs_app, tmp_dbs):
+        item = make_nicegui_item(
+            "vocab", "カスタム", "custom word", "かすたむ",
+            meaning_notes="remember: custom",
+            reading_notes="sounds like 'custom'",
+        )
+        srs_app.add_review_item(item)
+        row = self._fetch_row(tmp_dbs)
+        assert row is not None
+        assert row["MeaningNote"] == "remember: custom"
+        assert row["ReadingNote"] == "sounds like 'custom'"
+
+    def test_custom_vocab_not_in_db_is_accepted(self, srs_app, tmp_dbs):
+        item = make_nicegui_item("vocab", "存在しない語", "nonexistent word", "そんざいしないご")
+        srs_app.add_review_item(item)
+        row = self._fetch_row(tmp_dbs)
+        assert row is not None
+        assert row["AssociatedVocab"] == "存在しない語"
+
+    def test_custom_kanji_not_in_db_is_accepted(self, srs_app, tmp_dbs):
+        item = make_nicegui_item("kanji", "𠀋", "custom kanji", "カスタム")
+        srs_app.add_review_item(item)
+        row = self._fetch_row(tmp_dbs)
+        assert row is not None
+        assert row["AssociatedKanji"] == "𠀋"

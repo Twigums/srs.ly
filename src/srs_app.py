@@ -261,11 +261,23 @@ class SrsApp:
     # returns df of vocab that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
     @check_conn
-    def discover_new_vocab(self, condition: str = "v.JlptLevel IN (1, 2, 3, 4, 5)") -> DataFrame:
+    def discover_new_vocab(self, condition: str = "1=1", meaning_search: str | None = None) -> DataFrame:
+        meaning_clause = ""
+        if meaning_search not in (None, ""):
+            meaning_clause = (
+                f"AND EXISTS ("
+                f"SELECT 1 FROM VocabEntityVocabMeaning AS _vl"
+                f" JOIN VocabMeaningSet AS _vm ON _vl.Meanings_ID = _vm.ID"
+                f" WHERE _vl.VocabEntity_ID = v.ID"
+                f" AND _vm.Meaning LIKE '%{meaning_search}%'"
+                f")"
+            )
+
         q = f"""
             WITH v_except AS (
                 SELECT * FROM VocabSet AS v
                 WHERE {condition}
+                {meaning_clause}
                 AND NOT EXISTS (
                     SELECT 1 FROM {self.name_srs_table} AS srs
                     WHERE srs.{self.col_dict["vocab_col"]} = v.KanjiWriting
@@ -284,11 +296,22 @@ class SrsApp:
     # returns df of kanji that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
     @check_conn
-    def discover_new_kanji(self, condition: str = "k.JpltLevel IN (1, 2, 3, 4, 5)") -> DataFrame:
+    def discover_new_kanji(self, condition: str = "1=1", meaning_search: str | None = None) -> DataFrame:
+        meaning_clause = ""
+        if meaning_search not in (None, ""):
+            meaning_clause = (
+                f"AND EXISTS ("
+                f"SELECT 1 FROM KanjiMeaningSet AS _km"
+                f" WHERE _km.Kanji_ID = k.ID"
+                f" AND _km.Meaning LIKE '%{meaning_search}%'"
+                f")"
+            )
+
         q = f"""
             WITH k_except AS (
                 SELECT * FROM KanjiSet AS k
                 WHERE {condition}
+                {meaning_clause}
                 AND NOT EXISTS (
                     SELECT 1 FROM {self.name_srs_table} AS srs
                     WHERE srs.{self.col_dict["kanji_col"]} = k.Character

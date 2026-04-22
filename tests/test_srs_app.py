@@ -9,6 +9,121 @@ from tests.conftest import insert_srs_item, TEST_SRS_INTERVAL
 
 
 # ---------------------------------------------------------------------------
+# Full-DB schema + helpers (for discover_new_vocab / discover_new_kanji tests)
+# ---------------------------------------------------------------------------
+
+_FULL_DB_SCHEMA = """
+CREATE TABLE KanjiSet (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Character TEXT,
+    StrokeCount INTEGER,
+    Grade SMALLINT,
+    MostUsedRank INTEGER,
+    JlptLevel SMALLINT,
+    OnYomi TEXT,
+    KunYomi TEXT,
+    Nanori TEXT,
+    UnicodeValue INTEGER,
+    NewspaperRank INTEGER,
+    WkLevel INTEGER
+);
+CREATE TABLE KanjiMeaningSet (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Language TEXT,
+    Meaning TEXT NOT NULL,
+    Kanji_ID INTEGER NOT NULL
+);
+CREATE TABLE VocabSet (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    KanjiWriting TEXT,
+    KanaWriting TEXT NOT NULL,
+    IsCommon BOOLEAN NOT NULL DEFAULT 0,
+    FrequencyRank INT64,
+    Furigana TEXT,
+    JlptLevel INTEGER,
+    WkLevel INTEGER,
+    WikiRank INTEGER,
+    GroupId INTEGER NOT NULL DEFAULT 0,
+    IsMain BOOLEAN NOT NULL DEFAULT 1
+);
+CREATE TABLE VocabMeaningSet (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Meaning TEXT
+);
+CREATE TABLE VocabEntityVocabMeaning (
+    VocabEntity_ID INTEGER NOT NULL,
+    Meanings_ID INTEGER NOT NULL
+);
+CREATE TABLE VocabMeaningVocabCategory (
+    VocabMeaningVocabCategory_VocabCategory_ID INTEGER NOT NULL,
+    Categories_ID INTEGER NOT NULL
+);
+CREATE TABLE VocabCategorySet (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name TEXT
+);
+"""
+
+
+def _insert_vocab(conn, *, kanji_writing, kana_writing, jlpt_level=None, meaning="test meaning"):
+    conn.execute(
+        "INSERT INTO VocabSet (KanjiWriting, KanaWriting, IsCommon, GroupId, IsMain, JlptLevel)"
+        " VALUES (?, ?, 1, 1, 1, ?)",
+        (kanji_writing, kana_writing, jlpt_level),
+    )
+    vocab_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute("INSERT INTO VocabMeaningSet (Meaning) VALUES (?)", (meaning,))
+    meaning_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute(
+        "INSERT INTO VocabEntityVocabMeaning (VocabEntity_ID, Meanings_ID) VALUES (?, ?)",
+        (vocab_id, meaning_id),
+    )
+    conn.execute(
+        "INSERT INTO VocabMeaningVocabCategory"
+        " (VocabMeaningVocabCategory_VocabCategory_ID, Categories_ID) VALUES (?, 1)",
+        (meaning_id,),
+    )
+    conn.execute("INSERT OR IGNORE INTO VocabCategorySet (ID, Name) VALUES (1, 'general')")
+    conn.commit()
+    return vocab_id
+
+
+def _insert_kanji(conn, *, character, jlpt_level=None, meaning="test meaning"):
+    conn.execute(
+        "INSERT INTO KanjiSet (Character, JlptLevel) VALUES (?, ?)",
+        (character, jlpt_level),
+    )
+    kanji_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute(
+        "INSERT INTO KanjiMeaningSet (Language, Meaning, Kanji_ID) VALUES ('en', ?, ?)",
+        (meaning, kanji_id),
+    )
+    conn.commit()
+    return kanji_id
+
+
+@pytest.fixture
+def srs_app_full(tmp_dbs):
+    """SrsApp connected to a full DB that has vocab/kanji schema populated."""
+    full_db, srs_db = tmp_dbs
+    conn = sqlite3.connect(full_db)
+    conn.executescript(_FULL_DB_SCHEMA)
+    conn.commit()
+    conn.close()
+
+    config = SrsConfig(
+        srs_interval=TEST_SRS_INTERVAL,
+        path_to_full_db=full_db,
+        path_to_srs_db=srs_db,
+        entries_before_commit=1,
+    )
+    app = SrsApp(config)
+    app.init_db()
+    yield app
+    app.close_db()
+
+
+# ---------------------------------------------------------------------------
 # check_conn decorator
 # ---------------------------------------------------------------------------
 
@@ -544,3 +659,172 @@ class TestGetReviewStatsTimezone:
 
         assert self._today_count(srs_app, utc_offset_minutes=0) == 0
         assert self._today_count(srs_app, utc_offset_minutes=utc_offset_minutes) == 1
+
+
+# ---------------------------------------------------------------------------
+# discover_new_vocab — JLPT scope (issue #32 part 1a)
+# ---------------------------------------------------------------------------
+
+class TestDiscoverNewVocabJlptScope:
+    def test_default_shows_vocab_with_null_jlpt(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="食べ物", kana_writing="たべもの", jlpt_level=None)
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab()
+
+        assert len(df) >= 1
+        assert "食べ物" in df["KanjiWriting"].values
+
+    def test_default_shows_all_jlpt_levels(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="一", kana_writing="いち",   jlpt_level=5)
+        _insert_vocab(conn, kanji_writing="二", kana_writing="に",     jlpt_level=3)
+        _insert_vocab(conn, kanji_writing="三", kana_writing="さん",   jlpt_level=None)
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab()
+
+        assert len(df) == 3
+
+    def test_explicit_jlpt_condition_still_filters(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="食べる",  kana_writing="たべる",    jlpt_level=5)
+        _insert_vocab(conn, kanji_writing="難しい",  kana_writing="むずかしい", jlpt_level=2)
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(condition="v.JlptLevel = 5")
+
+        assert len(df) == 1
+        assert df.iloc[0]["KanjiWriting"] == "食べる"
+
+
+# ---------------------------------------------------------------------------
+# discover_new_kanji — JLPT scope (issue #32 part 1a)
+# ---------------------------------------------------------------------------
+
+class TestDiscoverNewKanjiJlptScope:
+    def test_default_shows_kanji_with_null_jlpt(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="龍", jlpt_level=None)
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji()
+
+        assert len(df) >= 1
+        assert "龍" in df["Character"].values
+
+    def test_default_shows_all_jlpt_levels(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="一", jlpt_level=5)
+        _insert_kanji(conn, character="龍", jlpt_level=None)
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji()
+
+        assert len(df) == 2
+
+    def test_explicit_jlpt_condition_still_filters(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="一", jlpt_level=5)
+        _insert_kanji(conn, character="龍", jlpt_level=None)
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji(condition="k.JlptLevel = 5")
+
+        assert len(df) == 1
+        assert df.iloc[0]["Character"] == "一"
+
+
+# ---------------------------------------------------------------------------
+# discover_new_vocab — meaning search (issue #32 part 1b)
+# ---------------------------------------------------------------------------
+
+class TestDiscoverNewVocabMeaningSearch:
+    def test_meaning_search_returns_matching_vocab(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="食べる", kana_writing="たべる", meaning="to eat")
+        _insert_vocab(conn, kanji_writing="飲む",   kana_writing="のむ",   meaning="to drink")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(meaning_search="eat")
+
+        assert len(df) == 1
+        assert df.iloc[0]["KanjiWriting"] == "食べる"
+
+    def test_meaning_search_none_returns_all(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="食べる", kana_writing="たべる", meaning="to eat")
+        _insert_vocab(conn, kanji_writing="飲む",   kana_writing="のむ",   meaning="to drink")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(meaning_search=None)
+
+        assert len(df) == 2
+
+    def test_meaning_search_partial_match(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="食べ物", kana_writing="たべもの", meaning="food, eating")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(meaning_search="food")
+
+        assert len(df) == 1
+
+    def test_meaning_search_no_match_returns_empty(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="食べる", kana_writing="たべる", meaning="to eat")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(meaning_search="sleep")
+
+        assert df.empty
+
+
+# ---------------------------------------------------------------------------
+# discover_new_kanji — meaning search (issue #32 part 1b)
+# ---------------------------------------------------------------------------
+
+class TestDiscoverNewKanjiMeaningSearch:
+    def test_meaning_search_returns_matching_kanji(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="食", meaning="eat, food")
+        _insert_kanji(conn, character="水", meaning="water")
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji(meaning_search="eat")
+
+        assert len(df) == 1
+        assert df.iloc[0]["Character"] == "食"
+
+    def test_meaning_search_none_returns_all(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="食", meaning="eat")
+        _insert_kanji(conn, character="水", meaning="water")
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji(meaning_search=None)
+
+        assert len(df) == 2
+
+    def test_meaning_search_no_match_returns_empty(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="食", meaning="eat")
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji(meaning_search="sleep")
+
+        assert df.empty
