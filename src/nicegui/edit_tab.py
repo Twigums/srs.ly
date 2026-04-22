@@ -59,7 +59,7 @@ class EditTab(ui.element):
         self.add_button.visible = False
 
         # sql query conditions to filter results
-        srs_condition = ",".join([str(val) for val in self.srs_levels.value])
+        srs_condition = ",".join([str(val) for val in (self.srs_levels.value or [])])
         meaning_condition = self.meaning_search.value
         reading_condition = self.reading_search.value
 
@@ -73,20 +73,17 @@ class EditTab(ui.element):
             conditions.append(f"{self.srs_app.col_dict['current_grade_col']} IN ({srs_condition})")
 
         if meaning_condition not in ["", None]:
-            conditions.append(f"',' || Meanings || ',' LIKE '%,{meaning_condition},%'")
+            conditions.append(f"Meanings LIKE '%{meaning_condition}%'")
 
         if reading_condition not in ["", None]:
-            conditions.append(f"',' || Readings || ',' LIKE '%,{reading_condition},%'")
+            conditions.append(f"Readings LIKE '%{reading_condition}%'")
 
-        # need to set a base condition if no filters were applied
-        if conditions == []:
-            condition = "1=1"
+        condition = " AND ".join(conditions) if conditions else "1=1"
 
-        else:
-            condition = " AND ".join(conditions)
+        selected_types = self.item_type.value or []
 
         # handle kanji
-        if "kanji" in self.item_type.value:
+        if "kanji" in selected_types:
             df_kanji = self.srs_app.filter_study_items(item_type = "kanji", condition = condition)
 
             if not df_kanji.empty:
@@ -97,7 +94,7 @@ class EditTab(ui.element):
                 list_dfs.append(display_df_kanji)
 
         # handle vocab
-        if "vocab" in self.item_type.value:
+        if "vocab" in selected_types:
 
             df_vocab = self.srs_app.filter_study_items(item_type = "vocab", condition = condition)
 
