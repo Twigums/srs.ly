@@ -1,31 +1,13 @@
 import discord
-import re
 import random
 
 from enum import Enum, auto
 from discord.ext import commands
-from pyokaka import okaka
 from rapidfuzz import process, fuzz
 
 from src.dataclasses import BotConfig, Colors, Card
+from src.utils import expand_meanings, romaji_to_kana
 
-
-def romaji_to_kana(string):
-    processed_string = ""
-    prev = ""
-
-    for char in string.lower():
-        if char + prev == "nn":
-            prev = ""
-            processed_string += "n'"
-
-        else:
-            prev = char
-            processed_string += char
-
-    kana = okaka.convert(processed_string)
-
-    return kana
 
 class AppState(Enum):
     RUNNING = auto()
@@ -234,16 +216,10 @@ class Bot:
 
             # use fuzzy matching to score meanings
             case "meaning":
-                valid_readings = self.current_card.meanings.split(",")
+                valid_readings = expand_meanings(self.current_card.meanings)
 
                 for reading in valid_readings:
-                    reading_stripped = reading.strip()
-                    reading_lower = reading_stripped.lower()
-                    remove_all_in_parentheses = re.sub(r"\s*\([^)]*\)\s*", "", reading_lower)
-                    strip_parentheses = re.sub(r"[()]", "", reading_lower)
-
-                    lookup_readings[strip_parentheses] = reading
-                    lookup_readings[remove_all_in_parentheses] = reading
+                    lookup_readings[reading.strip().lower()] = reading
 
                 _, matching_score, _ = process.extractOne(answer_lower, lookup_readings.keys(), scorer = fuzz.QRatio)
 
