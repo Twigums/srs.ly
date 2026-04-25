@@ -39,17 +39,27 @@ def _split_top_level(s: str) -> list[str]:
 
 
 def _expand_segment(segment: str) -> list[str]:
-    match = re.match(r"^(.*?)\s*\(([^)]+)\)\s*$", segment.strip())
-    if not match:
-        return [segment.strip()]
-    base = match.group(1).strip()
-    options = [opt.strip() for opt in match.group(2).split(",")]
-    results: list[str] = []
-    if base:
-        results.append(base)
-    for opt in options:
-        results.append(f"{base} {opt}".strip() if base else opt)
-    return results
+    segment = segment.strip()
+    trailing = re.match(r"^(.*?)\s*\(([^)]+)\)\s*$", segment)
+    if trailing:
+        base = trailing.group(1).strip()
+        options = [opt.strip() for opt in trailing.group(2).split(",")]
+        results: list[str] = []
+        if base:
+            results.append(base)
+        for opt in options:
+            results.append(f"{base} {opt}".strip() if base else opt)
+        return results
+
+    leading = re.match(r"^\(([^)]+)\)\s+(.+)$", segment)
+    if leading:
+        options = [opt.strip() for opt in leading.group(1).split(",")]
+        suffix = leading.group(2).strip()
+        results = [f"{opt} {suffix}" for opt in options]
+        results.append(suffix)
+        return results
+
+    return [segment]
 
 
 def expand_meanings(meanings_str: str) -> list[str]:

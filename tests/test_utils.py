@@ -41,3 +41,13 @@ class TestExpandMeanings:
 
     def test_empty_string(self):
         assert expand_meanings("") == []
+
+    def test_leading_parens_single_option(self):
+        # "(foo) bar" -> ["foo bar", "bar"]
+        result = expand_meanings("(foo) bar")
+        assert result == ["foo bar", "bar"]
+
+    def test_leading_parens_multiple_options(self):
+        # "(foo, baz) bar" -> ["foo bar", "baz bar", "bar"]
+        result = expand_meanings("(foo, baz) bar")
+        assert result == ["foo bar", "baz bar", "bar"]
