@@ -266,6 +266,18 @@ class AddTab(ui.element):
 
     # function to show selected rows as individual rows below table
     def render_inputs(self, selected: list) -> bool:
+        # preserve any edits the user made before re-rendering
+        saved = {
+            item_id: {
+                "kanji": inputs["kanji"].value,
+                "readings": inputs["readings"].value,
+                "meanings": inputs["meanings"].value,
+                "reading_notes": inputs["reading_notes"].value,
+                "meaning_notes": inputs["meaning_notes"].value,
+            }
+            for item_id, inputs in self.selected_items.items()
+        }
+
         self.input_container.clear()
         self.selected_items.clear()
 
@@ -282,7 +294,10 @@ class AddTab(ui.element):
                 self.items_separator.visible = True
 
                 # display a row for each item
-                for i, item in enumerate(selected):
+                for item in selected:
+                    item_id = item["id"]
+                    prev = saved.get(item_id, {})
+
                     with self.input_container:
                         with ui.row():
 
@@ -291,7 +306,7 @@ class AddTab(ui.element):
                             match item["type"]:
                                 case "kanji":
                                     with ui.grid(columns = 2):
-                                        ui.label("Onyomi:") 
+                                        ui.label("Onyomi:")
                                         ui.label(item["onyomi"])
 
                                         ui.label("Kunyomi:")
@@ -302,16 +317,20 @@ class AddTab(ui.element):
                                 case "vocab":
                                     ui.label(f"Vocab has tags: {item['Tags']}")
 
-                            kanji_input = ui.input("Kanji", value = item["Kanji"])
-                            readings_input = ui.input("Readings", value = item["Readings"])
-                            meanings_input = ui.input("Meanings", value = item["Meanings"])
-                            reading_notes_input = ui.input("Reading Notes", placeholder = "remembering tips!")
-                            meaning_notes_input = ui.input("Meaning Notes", placeholder = "remembering tips!")
+                            kanji_input = ui.input("Kanji", value = prev.get("kanji", item["Kanji"]))
+                            readings_input = ui.input("Readings", value = prev.get("readings", item["Readings"]))
+                            meanings_input = ui.input("Meanings", value = prev.get("meanings", item["Meanings"]))
+                            reading_notes_input = ui.input("Reading Notes",
+                                                           value = prev.get("reading_notes", ""),
+                                                           placeholder = "remembering tips!")
+                            meaning_notes_input = ui.input("Meaning Notes",
+                                                           value = prev.get("meaning_notes", ""),
+                                                           placeholder = "remembering tips!")
 
                         # a separator makes everything more readable
                         ui.separator().style("height: 0.1rem; width: 2rem;")
 
-                    self.selected_items[i] = {
+                    self.selected_items[item_id] = {
                         "kanji": kanji_input,
                         "readings": readings_input,
                         "meanings": meanings_input,

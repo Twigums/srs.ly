@@ -195,3 +195,139 @@ class TestAddTabPagePreservation:
             tab.update_search_results(reset_page=True)
             # calling with reset_page=True is the search-button default
             mock_update.assert_called_once_with(reset_page=True)
+
+
+# ---------------------------------------------------------------------------
+# render_inputs edit preservation — new issue
+# ---------------------------------------------------------------------------
+
+def _make_row(id_, kanji, readings, meanings, type_="vocab"):
+    return {
+        "id": id_,
+        "Kanji": kanji,
+        "Readings": readings,
+        "Meanings": meanings,
+        "Tags": "n5",
+        "type": type_,
+        "onyomi": None,
+        "kunyomi": None,
+        "nanori": None,
+    }
+
+
+def _edited(value: str):
+    return SimpleNamespace(value=value)
+
+
+class TestRenderInputsPreservation:
+    def _call_render(self, tab, mock_ui, selection):
+        mock_ui.input.reset_mock()
+        with patch("src.nicegui.add_tab.ui", mock_ui):
+            return tab.render_inputs(selection)
+
+    def test_checking_new_item_preserves_kanji_edit(self, srs_app):
+        tab, _, mock_ui = _make_add_tab(srs_app)
+
+        # item 0 already selected with user-edited kanji
+        tab.selected_items = {
+            0: {
+                "kanji": _edited("食べる_EDITED"),
+                "readings": _edited("たべる"),
+                "meanings": _edited("to eat"),
+                "reading_notes": _edited(""),
+                "meaning_notes": _edited(""),
+                "type": "vocab",
+            }
+        }
+
+        item0 = _make_row(0, "食べる", "たべる", "to eat")
+        item1 = _make_row(1, "飲む", "のむ", "to drink")
+
+        self._call_render(tab, mock_ui, [item0, item1])
+
+        kanji_calls = [c for c in mock_ui.input.call_args_list if c.args[0] == "Kanji"]
+        assert kanji_calls[0].kwargs.get("value") == "食べる_EDITED", (
+            "existing item kanji edit must be preserved when new item is checked"
+        )
+        assert kanji_calls[1].kwargs.get("value") == "飲む"
+
+    def test_checking_new_item_preserves_readings_edit(self, srs_app):
+        tab, _, mock_ui = _make_add_tab(srs_app)
+
+        tab.selected_items = {
+            0: {
+                "kanji": _edited("食べる"),
+                "readings": _edited("たべる_EDITED"),
+                "meanings": _edited("to eat"),
+                "reading_notes": _edited(""),
+                "meaning_notes": _edited(""),
+                "type": "vocab",
+            }
+        }
+
+        self._call_render(tab, mock_ui, [
+            _make_row(0, "食べる", "たべる", "to eat"),
+            _make_row(1, "飲む", "のむ", "to drink"),
+        ])
+
+        readings_calls = [c for c in mock_ui.input.call_args_list if c.args[0] == "Readings"]
+        assert readings_calls[0].kwargs.get("value") == "たべる_EDITED"
+
+    def test_checking_new_item_preserves_notes(self, srs_app):
+        tab, _, mock_ui = _make_add_tab(srs_app)
+
+        tab.selected_items = {
+            0: {
+                "kanji": _edited("食べる"),
+                "readings": _edited("たべる"),
+                "meanings": _edited("to eat"),
+                "reading_notes": _edited("my reading note"),
+                "meaning_notes": _edited("my meaning note"),
+                "type": "vocab",
+            }
+        }
+
+        self._call_render(tab, mock_ui, [
+            _make_row(0, "食べる", "たべる", "to eat"),
+            _make_row(1, "飲む", "のむ", "to drink"),
+        ])
+
+        reading_note_calls = [c for c in mock_ui.input.call_args_list if c.args[0] == "Reading Notes"]
+        meaning_note_calls = [c for c in mock_ui.input.call_args_list if c.args[0] == "Meaning Notes"]
+        assert reading_note_calls[0].kwargs.get("value") == "my reading note"
+        assert meaning_note_calls[0].kwargs.get("value") == "my meaning note"
+
+    def test_unchecking_item_removes_it_from_selected(self, srs_app):
+        tab, _, mock_ui = _make_add_tab(srs_app)
+
+        tab.selected_items = {
+            0: {
+                "kanji": _edited("食べる"),
+                "readings": _edited("たべる"),
+                "meanings": _edited("to eat"),
+                "reading_notes": _edited(""),
+                "meaning_notes": _edited(""),
+                "type": "vocab",
+            },
+            1: {
+                "kanji": _edited("飲む"),
+                "readings": _edited("のむ"),
+                "meanings": _edited("to drink"),
+                "reading_notes": _edited(""),
+                "meaning_notes": _edited(""),
+                "type": "vocab",
+            },
+        }
+
+        # user unchecks item 1, only item 0 remains
+        self._call_render(tab, mock_ui, [_make_row(0, "食べる", "たべる", "to eat")])
+        assert 1 not in tab.selected_items
+
+    def test_new_item_gets_default_values(self, srs_app):
+        tab, _, mock_ui = _make_add_tab(srs_app)
+        tab.selected_items = {}
+
+        self._call_render(tab, mock_ui, [_make_row(5, "新しい", "あたらしい", "new")])
+
+        kanji_calls = [c for c in mock_ui.input.call_args_list if c.args[0] == "Kanji"]
+        assert kanji_calls[0].kwargs.get("value") == "新しい"

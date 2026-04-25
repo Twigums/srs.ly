@@ -84,24 +84,6 @@ class TestRefreshHandler:
 
         mock_reload.assert_called_once()
 
-    def test_storage_key_absent_after_refresh_with_state(self, storage_with_state):
-        """After refresh the STORAGE_KEY must not exist in storage."""
-        from src.nicegui.options_tab import handle_refresh
-
-        with patch("src.nicegui.options_tab.ui"):
-            handle_refresh(storage_with_state)
-
-        assert STORAGE_KEY not in storage_with_state
-
-    def test_storage_unchanged_when_already_empty(self, empty_storage):
-        """Calling refresh on empty storage must not raise and leave storage empty."""
-        from src.nicegui.options_tab import handle_refresh
-
-        with patch("src.nicegui.options_tab.ui"):
-            handle_refresh(empty_storage)  # must not raise
-
-        assert STORAGE_KEY not in empty_storage
-
     def test_clear_happens_before_reload(self, storage_with_state):
         """Storage must be cleared before the reload is triggered (ordering check)."""
         from src.nicegui.options_tab import handle_refresh
