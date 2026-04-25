@@ -356,7 +356,7 @@ class ReviewTab(ui.element):
             # reading cards should be strict, since a mistype of kana usually means a different word
             case "reading":
                 valid_readings = self.current_item["Readings"].split(",")
-                self.correct_reading_display.text = str(valid_readings)
+                self.correct_reading_display.text = self.current_item["Readings"]
                 self.correct_reading_display.visible = True
                 self.correct_meaning_display.visible = False
 
@@ -374,7 +374,7 @@ class ReviewTab(ui.element):
             # use fuzzy matching to score meanings
             case "meaning":
                 valid_readings = expand_meanings(self.current_item["Meanings"])
-                self.correct_meaning_display.text = str(valid_readings)
+                self.correct_meaning_display.text = self.current_item["Meanings"]
                 self.correct_meaning_display.visible = True
                 self.correct_reading_display.visible = False
 
@@ -382,10 +382,6 @@ class ReviewTab(ui.element):
                     lookup_readings[reading.strip().lower()] = reading
 
                 matching_reading, matching_score, _ = process.extractOne(answer_lower, lookup_readings.keys(), scorer = fuzz.QRatio)
-
-        self.correct_reading_display.text = str(valid_readings)
-        self.correct_reading_display.visible = True
-        self.correct_meaning_display.visible = False
 
         # if the score is over a certain threshold, then we mark it as correct
         # otherwise, it's incorrect

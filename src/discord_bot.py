@@ -223,7 +223,10 @@ class Bot:
 
                 _, matching_score, _ = process.extractOne(answer_lower, lookup_readings.keys(), scorer = fuzz.QRatio)
 
-        valid_readings_str = str(valid_readings)
+        if self.current_card.card_type == "meaning":
+            valid_readings_str = self.current_card.meanings
+        else:
+            valid_readings_str = self.current_card.readings
         self.previous_answer = answer_kana if answer_kana else answer_lower
 
         # if the score is over a certain threshold, then we mark it as correct
