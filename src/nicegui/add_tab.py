@@ -24,6 +24,8 @@ class AddTab(ui.element):
 
         self.srs_app = config.srs_app
 
+        self.current_page = 1
+
         # dictionary to store selected item information
         # this is important for sending information back to the app
         self.selected_items = dict()
@@ -94,13 +96,19 @@ class AddTab(ui.element):
                 on_click = lambda: self.add_custom_item(),
             )
 
+    def _on_pagination_update(self, e) -> None:
+        self.current_page = e.args.get("page", 1)
+
     # updates the selection page every call
     # also resets the containers
-    def update_search_results(self) -> None:
+    def update_search_results(self, reset_page: bool = True) -> None:
         self.table_container.clear()
         self.input_container.clear()
         self.selected_items.clear()
         self.add_button.visible = False
+
+        if reset_page:
+            self.current_page = 1
 
         # sql query conditions to filter results
         jlpt_condition = ",".join([str(val) for val in (self.jlpt_levels.value or [])])
@@ -250,8 +258,9 @@ class AddTab(ui.element):
                         row_key = "id",
                         selection = "multiple",
                         on_select = lambda e: self.render_inputs(e.selection),
-                        pagination = 100, # # of items to show on a page
+                        pagination = {"rowsPerPage": 100, "page": self.current_page},
                     ).classes("w-full vocab-table")
+                    table.on("update:pagination", self._on_pagination_update)
 
         return None
 
@@ -321,7 +330,7 @@ class AddTab(ui.element):
             self.srs_app.add_review_item(self.selected_items[key])
 
         self.add_spinner.visible = False
-        self.update_search_results()
+        self.update_search_results(reset_page=False)
         ui.notify("Successfully Added Items!")
 
         return None

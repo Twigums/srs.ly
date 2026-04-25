@@ -1,6 +1,8 @@
 import sqlite3
 import pytest
 from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch, call
 
 from tests.conftest import insert_srs_item, make_nicegui_item
 
@@ -130,3 +132,66 @@ class TestAddCustomItem:
         row = self._fetch_row(tmp_dbs)
         assert row is not None
         assert row["AssociatedKanji"] == "𠀋"
+
+
+# ---------------------------------------------------------------------------
+# AddTab page preservation — issue #33
+# ---------------------------------------------------------------------------
+
+def _make_add_tab(srs_app):
+    """Instantiate AddTab with NiceGUI UI elements mocked out."""
+    config = SimpleNamespace(srs_app=srs_app)
+
+    mock_table = MagicMock()
+    mock_ui = MagicMock()
+    mock_ui.table.return_value = mock_table
+
+    # ui.element / ui.card / ui.column / ui.row / ui.separator used as context
+    # managers — make them return a MagicMock that supports __enter__/__exit__
+    def _cm(*args, **kwargs):
+        m = MagicMock()
+        m.__enter__ = MagicMock(return_value=m)
+        m.__exit__ = MagicMock(return_value=False)
+        return m
+
+    for attr in ("element", "card", "column", "row", "separator", "grid"):
+        getattr(mock_ui, attr).side_effect = _cm
+
+    with patch("src.nicegui.add_tab.ui", mock_ui):
+        from src.nicegui.add_tab import AddTab
+        tab = AddTab(config)
+
+    return tab, mock_table, mock_ui
+
+
+class TestAddTabPagePreservation:
+    def test_current_page_initialises_to_one(self, srs_app):
+        tab, _, _ = _make_add_tab(srs_app)
+        assert tab.current_page == 1
+
+    def test_on_pagination_update_stores_page(self, srs_app):
+        tab, _, _ = _make_add_tab(srs_app)
+        event = SimpleNamespace(args={"page": 3, "rowsPerPage": 100})
+        tab._on_pagination_update(event)
+        assert tab.current_page == 3
+
+    def test_add_selected_items_preserves_current_page(self, srs_app):
+        tab, _, _ = _make_add_tab(srs_app)
+        tab.current_page = 4
+        tab.selected_items = {
+            0: make_nicegui_item("vocab", "食べる", "to eat", "たべる"),
+        }
+        tab.add_spinner = MagicMock()
+
+        with patch.object(tab, "update_search_results") as mock_update:
+            tab.add_selected_items()
+            mock_update.assert_called_once_with(reset_page=False)
+
+    def test_search_button_resets_page(self, srs_app):
+        tab, _, _ = _make_add_tab(srs_app)
+        tab.current_page = 5
+
+        with patch.object(tab, "update_search_results") as mock_update:
+            tab.update_search_results(reset_page=True)
+            # calling with reset_page=True is the search-button default
+            mock_update.assert_called_once_with(reset_page=True)
