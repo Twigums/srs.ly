@@ -1,5 +1,6 @@
 import sqlite3
 import pytest
+from collections import deque
 from datetime import datetime, timezone
 
 from src.dataclasses import SrsConfig
@@ -156,7 +157,7 @@ class TestResetReviewVariables:
         assert srs_app.current_index == 0
         assert srs_app.current_completed == 0
         assert srs_app.stop_updating_review is False
-        assert srs_app.current_reviews == []
+        assert not srs_app.current_reviews
 
 
 # ---------------------------------------------------------------------------
@@ -224,16 +225,16 @@ class TestCommit:
 
 class TestGetCurrentItem:
     def test_returns_none_when_empty(self, srs_app):
-        srs_app.current_reviews = []
+        srs_app.current_reviews = deque()
         assert srs_app.get_current_item() is None
 
     def test_returns_item_at_current_index(self, srs_app):
-        srs_app.current_reviews = [{"id": 1}, {"id": 2}]
+        srs_app.current_reviews = deque([{"id": 1}, {"id": 2}])
         srs_app.current_index = 1
         assert srs_app.get_current_item() == {"id": 2}
 
     def test_wraps_index_when_out_of_bounds(self, srs_app):
-        srs_app.current_reviews = [{"id": 10}]
+        srs_app.current_reviews = deque([{"id": 10}])
         srs_app.current_index = 5
         item = srs_app.get_current_item()
         assert srs_app.current_index == 0
@@ -828,3 +829,38 @@ class TestDiscoverNewKanjiMeaningSearch:
         df = srs_app_full.discover_new_kanji(meaning_search="sleep")
 
         assert df.empty
+
+
+# ---------------------------------------------------------------------------
+# TestCurrentReviewsIsDeque  (issue #28)
+# ---------------------------------------------------------------------------
+
+class TestCurrentReviewsIsDeque:
+    """current_reviews must be a deque for O(1) popleft."""
+
+    def test_is_deque_after_reset(self, srs_app):
+        srs_app.reset_review_variables()
+        assert isinstance(srs_app.current_reviews, deque)
+
+    def test_is_deque_after_session_start(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        insert_srs_item(conn, associated_vocab="食べる",
+                        next_answer_date="2000-01-01 00:00:00")
+        conn.close()
+        srs_app.start_review_session()
+        assert isinstance(srs_app.current_reviews, deque)
+
+    def test_popleft_removes_front_card(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        insert_srs_item(conn, associated_vocab="食べる",
+                        next_answer_date="2000-01-01 00:00:00")
+        insert_srs_item(conn, associated_vocab="飲む",
+                        next_answer_date="2000-01-01 00:00:00")
+        conn.close()
+        srs_app.start_review_session()
+        front = srs_app.current_reviews[0]
+        removed = srs_app.current_reviews.popleft()
+        assert removed == front
+        assert srs_app.current_reviews[0] != front

@@ -231,7 +231,7 @@ class Bot:
 
         # if the score is over a certain threshold, then we mark it as correct
         # otherwise, it's incorrect
-        current_review = self.srs_app.current_reviews.pop(self.srs_app.current_index)
+        current_review = self.srs_app.current_reviews.popleft()
 
         to_append = 0
         if matching_score > self.srs_app.match_score_threshold:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from typing import Any
 
 STORAGE_KEY = "review_session"
@@ -41,7 +42,7 @@ def load_review_state(
 
         return None
 
-    srs_app.current_reviews = list(state["current_reviews"])
+    srs_app.current_reviews = deque(state["current_reviews"])
     srs_app.current_index = int(state["current_index"])
     srs_app.current_completed = int(state["current_completed"])
     srs_app.len_review_ids = int(state["len_review_ids"])

@@ -1,4 +1,5 @@
 import pytest
+from collections import deque
 from unittest.mock import MagicMock, patch
 
 from src.discord_bot import Bot, AppState, romaji_to_kana
@@ -70,7 +71,7 @@ class TestProcessAnswerReading:
 
     def _setup_reviews(self, bot, mock_srs_app, item_id=1):
         review = {"ID": item_id, "card_type": "reading"}
-        mock_srs_app.current_reviews = [review]
+        mock_srs_app.current_reviews = deque([review])
         mock_srs_app.current_index = 0
         bot.item_dict = {}
 
@@ -89,7 +90,7 @@ class TestProcessAnswerReading:
     def test_incorrect_reading_reappends_to_reviews(self, bot, mock_srs_app):
         self._set_reading_card(bot)
         review = {"ID": 1, "card_type": "reading"}
-        mock_srs_app.current_reviews = [review]
+        mock_srs_app.current_reviews = deque([review])
         mock_srs_app.current_index = 0
         bot.item_dict = {}
 
@@ -101,7 +102,7 @@ class TestProcessAnswerReading:
         """will_submit=True: even a wrong answer is recorded in item_dict (as 0)."""
         self._set_reading_card(bot)
         review = {"ID": 1, "card_type": "reading"}
-        mock_srs_app.current_reviews = [review]
+        mock_srs_app.current_reviews = deque([review])
         mock_srs_app.current_index = 0
         bot.item_dict = {}
 
@@ -124,7 +125,7 @@ class TestProcessAnswerMeaning:
 
     def _setup_reviews(self, bot, mock_srs_app, item_id=1):
         review = {"ID": item_id, "card_type": "meaning"}
-        mock_srs_app.current_reviews = [review]
+        mock_srs_app.current_reviews = deque([review])
         mock_srs_app.current_index = 0
         bot.item_dict = {}
 
@@ -155,7 +156,7 @@ class TestProcessAnswerCompletion:
         bot.current_card.readings = "たべる"
         bot.current_card.meanings = "to eat"
 
-        mock_srs_app.current_reviews = [{"ID": 42}]
+        mock_srs_app.current_reviews = deque([{"ID": 42}])
         mock_srs_app.current_index = 0
         # Simulate reading card already marked correct
         bot.item_dict = {42: [1]}
@@ -173,7 +174,7 @@ class TestProcessAnswerCompletion:
         bot.current_card.readings = "たべる"
         bot.current_card.meanings = "to eat"
 
-        mock_srs_app.current_reviews = [{"ID": 42}]
+        mock_srs_app.current_reviews = deque([{"ID": 42}])
         mock_srs_app.current_index = 0
         # [0, 1] means reading had a failure, then passed; now meaning passes
         bot.item_dict = {42: [0, 1]}

@@ -1,5 +1,6 @@
 import sqlite3
 import pytest
+from collections import deque
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -143,7 +144,7 @@ def mock_srs_app():
     m.current_completed = 0
     m.len_review_ids = 5
     m.stop_updating_review = False
-    m.current_reviews = []
+    m.current_reviews = deque()
     return m
 
 
