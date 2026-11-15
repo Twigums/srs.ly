@@ -20,7 +20,7 @@ def first_valid(row: pd.core.series.Series) -> str | int | float | None:
     return None
 
 class AddTab(ui.element):
-    def __init__(self, config):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
         self.srs_app = config.srs_app

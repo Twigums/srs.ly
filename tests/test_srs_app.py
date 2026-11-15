@@ -4,7 +4,7 @@ from collections import deque
 from datetime import datetime, timezone
 
 from src.dataclasses import SrsConfig
-from src.srs_app import SrsApp, check_conn
+from src.srs_app import SrsApp
 
 from tests.conftest import insert_srs_item, TEST_SRS_INTERVAL
 

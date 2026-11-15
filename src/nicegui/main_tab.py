@@ -4,7 +4,7 @@ from src.dataclasses import AppConfig
 
 
 class MainTab(ui.element):
-    def __init__(self, config):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
         self.srs_app = config.srs_app

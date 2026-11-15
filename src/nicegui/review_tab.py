@@ -318,18 +318,17 @@ class ReviewTab(ui.element):
                 case _:
                     return None
 
+            self.kana_output = okaka.convert(self.text_buffer)
+            self.user_romaji.text = self.text_buffer
+
             # if the card type is reading, then we should show a kana output
             # if the card type is meaning, then we should show the text buffer
             match card_type:
                 case "reading":
-                    self.kana_output = okaka.convert(self.text_buffer)
                     self.user_hiragana.text = self.kana_output
 
                 case "meaning":
                     self.user_hiragana.text = self.text_buffer
-
-            self.kana_output = okaka.convert(self.text_buffer)
-            self.user_romaji.text = self.text_buffer
 
             # in the event of bugfixing/logging, printing res might be useful
             return res
@@ -365,7 +364,6 @@ class ReviewTab(ui.element):
 
                 if answer_stripped in lookup_readings:
                     matching_score = 100
-                    matching_reading = answer_stripped
 
                 else:
                     matching_score = 0

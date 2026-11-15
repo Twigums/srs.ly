@@ -1,9 +1,7 @@
 import pytest
 from collections import deque
-from unittest.mock import MagicMock, patch
 
-from src.discord_bot import Bot, AppState, romaji_to_kana
-from src.dataclasses import BotConfig, Colors
+from src.utils import romaji_to_kana
 
 
 # ---------------------------------------------------------------------------

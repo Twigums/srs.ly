@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from tests.conftest import insert_srs_item, make_nicegui_item
 

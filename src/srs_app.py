@@ -81,15 +81,9 @@ class SrsApp:
             self.conn.execute("PRAGMA journal_mode = WAL")
             self.conn.execute("PRAGMA busy_timeout = 30000")
 
+        # a path sqlite can't open (e.g. a missing folder) is a sqlite3.Error too
         except sqlite3.Error as e:
-            raise Exception(f"Conn failed: {e}")
-
-            return False
-
-        except FileNotFoundError as e:
-            raise Exception("File not found: {e}")
-
-            return False
+            raise Exception(f"Conn failed: {e}") from e
 
         self.cursor = self.conn.cursor()
         self.cursor.execute(f"ATTACH DATABASE '{self.path_to_srs_db}' AS {self.id_srs_db};")

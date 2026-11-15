@@ -7,7 +7,7 @@ from src.nicegui.paged_table import PagedTable
 
 
 class EditTab(ui.element):
-    def __init__(self, config):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
         self.srs_app = config.srs_app
@@ -177,11 +177,6 @@ class EditTab(ui.element):
                 for i, item in enumerate(selected):
                     with self.input_container:
                         with ui.row():
-
-                            display_df_columns = ["Kanji", "Readings", "Reading Notes", "Meanings", "Current SRS Grade", "Next Answer Date"]
-                            # kanji items should have their readings
-                            # vocab items should have their tags
-
                             kanji_input = ui.input("Kanji", value = item["Kanji"])
                             readings_input = ui.input("Readings", value = item["Readings"])
                             reading_notes_input = ui.input("Reading Notes", value = item["Reading Notes"])

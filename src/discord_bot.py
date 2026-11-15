@@ -96,7 +96,6 @@ class Bot:
         return None
 
     def update_embed(self):
-        previous_text = self.current_card.kanji or self.current_card.vocab
         current_item = self.srs_app.get_current_item()
 
         if current_item is None:
