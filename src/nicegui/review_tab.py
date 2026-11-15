@@ -172,7 +172,6 @@ class ReviewTab(ui.element):
         self.user_romaji.text = ""
         self.user_hiragana.text = ""
 
-        self.srs_app.current_index += 1
         self.update_review_display()
 
         return None
@@ -267,7 +266,7 @@ class ReviewTab(ui.element):
 
                 # if the user clicks the "quit after current set" key (with ctrl):
                 # the user wants to stop reviewing after the current set is completed
-                case self.key_quit_after_current_set if e.modifiers.ctrl:
+                case _ if key_str.lower() == self.key_quit_after_current_set.lower() and e.modifiers.ctrl:
                     ui.notify("Will quit after the remaining items are completed.")
                     self.srs_app.stop_updating_review = True
 
@@ -385,7 +384,7 @@ class ReviewTab(ui.element):
 
         # if the score is over a certain threshold, then we mark it as correct
         # otherwise, it's incorrect
-        current_review = self.srs_app.current_reviews.pop(self.srs_app.current_index)
+        current_review = self.srs_app.current_reviews.popleft()
         to_append = 0
         if matching_score > self.srs_app.match_score_threshold:
             to_append = 1

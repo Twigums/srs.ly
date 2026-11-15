@@ -162,7 +162,7 @@ class TestLoadReviewState:
         }
         item_dict = {}
         load_review_state(mock_storage, mock_srs_app, item_dict)
-        assert mock_srs_app.current_reviews == sample_reviews
+        assert list(mock_srs_app.current_reviews) == sample_reviews
 
     def test_restores_current_index(self, mock_storage, mock_srs_app, sample_reviews):
         mock_storage[STORAGE_KEY] = {
@@ -342,7 +342,7 @@ class TestRoundTrip:
 
         load_review_state(mock_storage, fresh_srs_app, restored_item_dict)
 
-        assert fresh_srs_app.current_reviews == sample_reviews
+        assert list(fresh_srs_app.current_reviews) == sample_reviews
         assert fresh_srs_app.current_index == 1
         assert fresh_srs_app.current_completed == 2
         assert fresh_srs_app.len_review_ids == 5

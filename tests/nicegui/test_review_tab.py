@@ -1,6 +1,86 @@
 import sqlite3
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+from nicegui.events import KeyEventArguments, KeyboardAction, KeyboardKey, KeyboardModifiers
 
 from tests.conftest import insert_srs_item
+
+
+# ---------------------------------------------------------------------------
+# Helpers for handle_key tests
+# ---------------------------------------------------------------------------
+
+def _make_key_event(key_name, *, ctrl=False, keydown=True):
+    """Build a KeyEventArguments for testing handle_key."""
+    return KeyEventArguments(
+        sender=MagicMock(),
+        client=MagicMock(),
+        action=KeyboardAction(keydown=keydown, keyup=not keydown, repeat=False),
+        key=KeyboardKey(name=key_name, code=f"Key{key_name.upper()}", location=0),
+        modifiers=KeyboardModifiers(alt=False, ctrl=ctrl, meta=False, shift=False),
+    )
+
+
+def _make_fake_review_tab(srs_app):
+    """Minimal fake ReviewTab instance for directly invoking handle_key."""
+    return SimpleNamespace(
+        current_item={"card_type": "meaning", "ID": 1},
+        key_quit_after_current_set="e",
+        key_ignore_answer="Backspace",
+        key_add_as_valid_response="=",
+        res_display=SimpleNamespace(text=""),
+        text_buffer="",
+        kana_output="",
+        user_hiragana=SimpleNamespace(text=""),
+        user_romaji=SimpleNamespace(text=""),
+        srs_app=srs_app,
+        alphabet=" ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?-",
+        incorrect_message="❌",
+    )
+
+
+# ---------------------------------------------------------------------------
+# TestHotkeyCapLockRobustness  (issue #34)
+# ---------------------------------------------------------------------------
+
+class TestHotkeyCapLockRobustness:
+    """Ctrl+E must end the session regardless of Caps Lock state."""
+
+    def test_ctrl_e_lowercase_triggers_quit(self, mock_srs_app):
+        """Baseline: Ctrl+e (Caps Lock OFF) sets the quit flag."""
+        fake = _make_fake_review_tab(mock_srs_app)
+        event = _make_key_event("e", ctrl=True)
+
+        with patch("src.nicegui.review_tab.ui"):
+            from src.nicegui.review_tab import ReviewTab
+            result = ReviewTab.handle_key(fake, event)
+
+        assert result == "quit"
+        assert mock_srs_app.stop_updating_review is True
+
+    def test_ctrl_e_uppercase_triggers_quit_with_caps_lock(self, mock_srs_app):
+        """Issue #34: Ctrl+E (Caps Lock ON) must also set the quit flag."""
+        fake = _make_fake_review_tab(mock_srs_app)
+        event = _make_key_event("E", ctrl=True)  # Caps Lock active → key.name = "E"
+
+        with patch("src.nicegui.review_tab.ui"):
+            from src.nicegui.review_tab import ReviewTab
+            result = ReviewTab.handle_key(fake, event)
+
+        assert result == "quit"
+        assert mock_srs_app.stop_updating_review is True
+
+    def test_e_without_ctrl_is_typed_normally(self, mock_srs_app):
+        """Pressing E without Ctrl inserts the character, not quit."""
+        fake = _make_fake_review_tab(mock_srs_app)
+        event = _make_key_event("E", ctrl=False)
+
+        with patch("src.nicegui.review_tab.ui"):
+            from src.nicegui.review_tab import ReviewTab
+            ReviewTab.handle_key(fake, event)
+
+        assert mock_srs_app.stop_updating_review is False
 
 
 # ---------------------------------------------------------------------------
@@ -151,8 +231,8 @@ class TestAddValidResponseFlow:
         srs_app.start_review_session()
         original_card = srs_app.current_reviews[srs_app.current_index]
 
-        # Simulate process_answer incorrect: pop from current_index, append to end
-        wrong_card = srs_app.current_reviews.pop(srs_app.current_index)
+        # Simulate process_answer incorrect: popleft from front, append to end
+        wrong_card = srs_app.current_reviews.popleft()
         srs_app.current_reviews.append(wrong_card)
 
         assert srs_app.current_reviews[-1] == original_card
@@ -176,7 +256,7 @@ class TestAddValidResponseFlow:
         initial_count = len(srs_app.current_reviews)
 
         # Simulate process_answer incorrect
-        wrong_card = srs_app.current_reviews.pop(srs_app.current_index)
+        wrong_card = srs_app.current_reviews.popleft()
         srs_app.current_reviews.append(wrong_card)
         expected_next = srs_app.current_reviews[srs_app.current_index]
 
@@ -204,14 +284,14 @@ class TestAddValidResponseFlow:
         srs_app.start_review_session()
 
         # Simulate process_answer incorrect
-        wrong_card = srs_app.current_reviews.pop(srs_app.current_index)
+        wrong_card = srs_app.current_reviews.popleft()
         srs_app.current_reviews.append(wrong_card)
         next_card = srs_app.current_reviews[srs_app.current_index]
 
-        # The bug: pop(current_index) removes the next card, not the wrong card
+        # After popleft+append, wrong card is at end; front is the next card
         card_at_current_index = srs_app.current_reviews[srs_app.current_index]
-        assert card_at_current_index == next_card      # confirms it would remove next card
-        assert card_at_current_index != wrong_card     # wrong card is NOT at current_index
+        assert card_at_current_index == next_card      # front is the next card
+        assert card_at_current_index != wrong_card     # wrong card is NOT at front
         assert srs_app.current_reviews[-1] == wrong_card  # wrong card is at the end
 
     def test_current_index_not_incremented_after_add_valid_response(self, srs_app, tmp_dbs):
@@ -231,7 +311,7 @@ class TestAddValidResponseFlow:
         srs_app.start_review_session()
 
         # Simulate process_answer incorrect
-        wrong_card = srs_app.current_reviews.pop(srs_app.current_index)
+        wrong_card = srs_app.current_reviews.popleft()
         srs_app.current_reviews.append(wrong_card)
         index_after_wrong = srs_app.current_index  # should be 0, pointing to next card
 

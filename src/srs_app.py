@@ -2,6 +2,7 @@ import pandas as pd
 import sqlite3
 import random
 
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 
@@ -66,7 +67,7 @@ class SrsApp:
         self.current_index = 0
         self.current_completed = 0
         self.stop_updating_review = False
-        self.current_reviews = []
+        self.current_reviews = deque()
 
         return None
 
