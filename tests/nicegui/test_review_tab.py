@@ -1,5 +1,10 @@
 import sqlite3
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from src.dataclasses import AppConfig
+from src.nicegui.review_tab import ReviewTab
 from tests.conftest import insert_srs_item
 
 
@@ -240,3 +245,37 @@ class TestAddValidResponseFlow:
 
         # current_index unchanged — still points to the next card
         assert srs_app.current_index == index_after_wrong
+
+
+# ---------------------------------------------------------------------------
+# ReviewTab.process_answer  (NiceGUI elements and per-user storage mocked out)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def review_tab(mock_srs_app):
+    mock_ui = MagicMock()
+
+    # give each label its own mock so res_display can be checked on its own
+    mock_ui.label.side_effect = lambda *args, **kwargs: MagicMock()
+
+    config = AppConfig(
+        keybinds = {"ignore_answer": "Backspace", "add_as_valid_response": "=", "quit_after_current_set": "ctrl,e"},
+        srs_app = mock_srs_app,
+    )
+
+    with patch("src.nicegui.review_tab.ui", mock_ui), patch("src.nicegui.review_tab.app"):
+        yield ReviewTab(config)
+
+
+class TestReviewTabMeaningAnswer:
+    @pytest.mark.parametrize("answer, expected_correct", [("son", False), ("soon", True)])
+    def test_short_meaning_must_match_exactly(self, review_tab, mock_srs_app, answer, expected_correct):
+        """Issue #42: "son" used to pass for "soon" via fuzzy matching."""
+        review_tab.current_item = {"ID": 1, "card_type": "meaning", "Meanings": "soon"}
+        review_tab.item_dict = {}
+        mock_srs_app.current_reviews = [review_tab.current_item]
+
+        review_tab.process_answer(answer, will_submit = False)
+
+        expected = review_tab.correct_message if expected_correct else review_tab.incorrect_message
+        assert review_tab.res_display.text == expected

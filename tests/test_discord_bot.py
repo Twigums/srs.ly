@@ -141,6 +141,14 @@ class TestProcessAnswerMeaning:
         is_correct, _ = bot.process_answer("xyzzy", False)
         assert is_correct is False
 
+    @pytest.mark.parametrize("answer, expected", [("son", False), ("Soon", True)])
+    def test_short_meaning_must_match_exactly(self, bot, mock_srs_app, answer, expected):
+        """Issue #42: "son" used to pass for "soon" via fuzzy matching."""
+        self._set_meaning_card(bot, meanings="soon")
+        self._setup_reviews(bot, mock_srs_app)
+        is_correct, _ = bot.process_answer(answer, False)
+        assert is_correct is expected
+
 
 # ---------------------------------------------------------------------------
 # process_answer — item completion logic

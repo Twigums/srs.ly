@@ -3,6 +3,7 @@ max_reviews_at_once = 10
 
 # minimum threshold for fuzzy string matching (decrease for more typing mistakes)
 # from 0 - 100
+# meanings of 5 characters or fewer must always be typed exactly
 match_score_threshold = 85
 
 # how many times app can write to the database before having to commit

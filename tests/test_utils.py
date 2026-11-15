@@ -1,5 +1,8 @@
 import pytest
-from src.utils import expand_meanings
+from src.utils import expand_meanings, meaning_match_score
+
+# default match_score_threshold in config.toml; answers must score above it
+THRESHOLD = 85
 
 
 class TestExpandMeanings:
@@ -51,3 +54,28 @@ class TestExpandMeanings:
         # "(foo, baz) bar" -> ["foo bar", "baz bar", "bar"]
         result = expand_meanings("(foo, baz) bar")
         assert result == ["foo bar", "baz bar", "bar"]
+
+
+class TestMeaningMatchScore:
+    """Tests for issue #42: short meanings must be typed exactly."""
+
+    @pytest.mark.parametrize("answer, meaning", [
+        ("son", "soon"),    # scored ~85.7 with fuzzy matching and passed
+        ("soon", "son"),
+        ("bead", "bread"),  # 5 characters is still strict
+    ])
+    def test_short_meaning_rejects_near_miss(self, answer, meaning):
+        assert meaning_match_score(answer, [meaning]) == 0
+
+    def test_short_meaning_accepts_exact_match_ignoring_case_and_spaces(self):
+        assert meaning_match_score("  Soon ", ["soon"]) == 100
+
+    def test_longer_meaning_still_allows_typo(self):
+        # 6 characters is past the strict cutoff, so fuzzy matching applies
+        assert meaning_match_score("frend", ["friend"]) > THRESHOLD
+
+    def test_best_scoring_meaning_wins(self):
+        assert meaning_match_score("before lng", ["soon", "before long"]) > THRESHOLD
+
+    def test_blank_answer_never_matches(self):
+        assert meaning_match_score("  ", ["", "soon"]) == 0

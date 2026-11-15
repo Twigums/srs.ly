@@ -3,10 +3,9 @@ import random
 
 from enum import Enum, auto
 from discord.ext import commands
-from rapidfuzz import process, fuzz
 
 from src.dataclasses import BotConfig, Colors, Card
-from src.utils import expand_meanings, romaji_to_kana
+from src.utils import expand_meanings, meaning_match_score, romaji_to_kana
 
 
 class AppState(Enum):
@@ -214,14 +213,10 @@ class Bot:
                 else:
                     matching_score = 0
 
-            # use fuzzy matching to score meanings
+            # use fuzzy matching to score meanings, but short meanings must be exact
             case "meaning":
                 valid_readings = expand_meanings(self.current_card.meanings)
-
-                for reading in valid_readings:
-                    lookup_readings[reading.strip().lower()] = reading
-
-                _, matching_score, _ = process.extractOne(answer_lower, lookup_readings.keys(), scorer = fuzz.QRatio)
+                matching_score = meaning_match_score(answer_lower, valid_readings)
 
         if self.current_card.card_type == "meaning":
             valid_readings_str = self.current_card.meanings

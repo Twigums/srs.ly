@@ -1,10 +1,9 @@
 from nicegui import app, ui
 from nicegui.events import KeyEventArguments
 from pyokaka import okaka
-from rapidfuzz import process, fuzz
 
 from src.dataclasses import AppConfig
-from src.utils import expand_meanings
+from src.utils import expand_meanings, meaning_match_score
 from src.review_storage import (
     save_review_state,
     load_review_state,
@@ -371,17 +370,14 @@ class ReviewTab(ui.element):
                 else:
                     matching_score = 0
 
-            # use fuzzy matching to score meanings
+            # use fuzzy matching to score meanings, but short meanings must be exact
             case "meaning":
                 valid_readings = expand_meanings(self.current_item["Meanings"])
                 self.correct_meaning_display.text = self.current_item["Meanings"]
                 self.correct_meaning_display.visible = True
                 self.correct_reading_display.visible = False
 
-                for reading in valid_readings:
-                    lookup_readings[reading.strip().lower()] = reading
-
-                matching_reading, matching_score, _ = process.extractOne(answer_lower, lookup_readings.keys(), scorer = fuzz.QRatio)
+                matching_score = meaning_match_score(answer_lower, valid_readings)
 
         # if the score is over a certain threshold, then we mark it as correct
         # otherwise, it's incorrect

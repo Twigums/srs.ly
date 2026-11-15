@@ -1,6 +1,11 @@
 import re
 
 from pyokaka import okaka
+from rapidfuzz import fuzz
+
+# meanings this short must be typed exactly: one typo in a short word often spells
+# a different word that still scores high on fuzzy matching (e.g. "son" for "soon")
+STRICT_MATCH_MAX_LENGTH = 5
 
 
 def romaji_to_kana(string: str) -> str:
@@ -74,3 +79,27 @@ def expand_meanings(meanings_str: str) -> list[str]:
     for segment in _split_top_level(meanings_str):
         result.extend(_expand_segment(segment))
     return result
+
+
+def meaning_match_score(answer: str, meanings: list[str]) -> float:
+    """Score an answer against its closest valid meaning, from 0 to 100.
+
+    Case and surrounding whitespace are ignored. Meanings of up to
+    STRICT_MATCH_MAX_LENGTH characters score 100 on an exact match and 0
+    otherwise; longer meanings are fuzzy matched so small typos still pass.
+    """
+    answer = answer.strip().lower()
+
+    # a blank answer never matches, same as fuzz.QRatio
+    if not answer:
+        return 0.0
+
+    best_score = 0.0
+    for meaning in meanings:
+        meaning = meaning.strip().lower()
+        if len(meaning) <= STRICT_MATCH_MAX_LENGTH:
+            score = 100.0 if answer == meaning else 0.0
+        else:
+            score = fuzz.QRatio(answer, meaning)
+        best_score = max(best_score, score)
+    return best_score
