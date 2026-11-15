@@ -13,6 +13,8 @@ The tests work by:
 """
 
 import pytest
+import tomlkit
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from src.review_storage import STORAGE_KEY
@@ -104,3 +106,39 @@ class TestRefreshHandler:
         assert call_order == ["clear", "reload"], (
             f"Expected ['clear', 'reload'], got {call_order}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Keybind inputs
+# ---------------------------------------------------------------------------
+
+CONFIG_TOML = """\
+[keybinds]
+ignore_answer = "Backspace"
+add_as_valid_response = "="
+quit_after_current_set = "ctrl,e"
+"""
+
+
+class TestKeybindInputs:
+    def test_each_input_saves_its_own_keybind(self, tmp_path, monkeypatch):
+        """Typing in any keybind input used to save it to the last keybind."""
+        from src.nicegui.options_tab import OptionsTab
+
+        (tmp_path / "config.toml").write_text(CONFIG_TOML)
+        monkeypatch.chdir(tmp_path)
+
+        with patch("src.nicegui.options_tab.ui") as mock_ui, \
+             patch("src.nicegui.options_tab.app") as mock_app:
+            mock_app.storage.user = {"is_dark_mode": False}
+            OptionsTab(SimpleNamespace(srs_app = MagicMock()))
+
+            for c in mock_ui.input.call_args_list:
+                c.kwargs["on_change"](SimpleNamespace(value = f"new {c.args[0]}"))
+
+        saved = tomlkit.parse((tmp_path / "config.toml").read_text()).unwrap()
+        assert saved["keybinds"] == {
+            "ignore_answer": "new ignore_answer",
+            "add_as_valid_response": "new add_as_valid_response",
+            "quit_after_current_set": "new quit_after_current_set",
+        }

@@ -37,8 +37,10 @@ class OptionsTab(ui.element):
 
         ui.label("Keybinds")
 
+        # k = k binds each input to its own keybind; otherwise every input would
+        # save to the last keybind, since the lambdas only look k up when called
         for k in self.keybinds:
-            self.keybind_inputs.append(ui.input(k, value = self.keybinds[k], on_change = lambda e: self.save_keybinds(e, k)))
+            self.keybind_inputs.append(ui.input(k, value = self.keybinds[k], on_change = lambda e, k = k: self.save_keybinds(e, k)))
 
         ui.separator()
 
