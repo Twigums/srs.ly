@@ -15,10 +15,9 @@ from src.nicegui.search_tab import SearchTab
 from src.nicegui.options_tab import OptionsTab
 
 
-def check_device(config: AppConfig) -> None:
+def log_device() -> None:
     res = ui.context.client.request.headers["user-agent"]
 
-    config.is_mobile = "Mobile" in res
     print(f"Connected from: {res}")
 
     return None
@@ -175,7 +174,7 @@ def main():
     else:
         print(f"Discord token not found in env var '{token_env}'. Running without Discord bot.")
 
-    app.on_connect(lambda: check_device(config_app))
+    app.on_connect(log_device)
 
     @ui.page("/")
     async def index() -> None:

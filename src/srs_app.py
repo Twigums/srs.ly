@@ -199,39 +199,6 @@ class SrsApp:
         df = pd.read_sql_query(q, self.conn)
         return df
 
-    # returns df of all vocabs present in the user's srs review
-    @check_conn
-    def get_study_vocab(self) -> set:
-        q = f"""
-            SELECT {self.col_dict["vocab_col"]} FROM {self.name_srs_table};
-            """
-
-        df = pd.read_sql_query(q, self.conn)
-
-        all_vocabs = set(df[self.col_dict["vocab_col"]].dropna())
-
-        return all_vocabs
-
-    # returns df of all kanji present in the user's srs review
-    # this is a set of both their vocab and kanji
-    # i should also blacklist all the hiragana and katakana, but it is what it is
-    @check_conn
-    def get_study_kanji(self) -> set:
-        q = f"""
-            SELECT {self.col_dict["vocab_col"]}, {self.col_dict["kanji_col"]} FROM {self.name_srs_table}
-            WHERE LENGTH({self.col_dict["vocab_col"]}) = 1
-            OR LENGTH({self.col_dict["kanji_col"]}) = 1;
-            """
-
-        df = pd.read_sql_query(q, self.conn)
-
-        vocab_kanjis = set(df[self.col_dict["vocab_col"]].dropna())
-        kanji_kanjis = set(df[self.col_dict["kanji_col"]].dropna())
-
-        all_kanjis = vocab_kanjis.union(kanji_kanjis)
-
-        return all_kanjis
-
     @check_conn
     def filter_study_items(self, item_type: str, condition: str = "1=1") -> DataFrame:
         match item_type:

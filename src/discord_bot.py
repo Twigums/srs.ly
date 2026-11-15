@@ -85,11 +85,6 @@ class Bot:
 
         return None
 
-    def start(self) -> None:
-        self.bot.run(self.token)
-
-        return None
-
     async def start_async(self) -> None:
         await self.bot.start(self.token)
 

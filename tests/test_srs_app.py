@@ -483,23 +483,6 @@ class TestAddValidResponse:
 
 
 # ---------------------------------------------------------------------------
-# get_study_kanji (regression for kanji_col NameError bug)
-# ---------------------------------------------------------------------------
-
-class TestGetStudyKanji:
-    def test_does_not_raise_name_error(self, srs_app, tmp_dbs):
-        _, srs_db = tmp_dbs
-        conn = sqlite3.connect(srs_db)
-        insert_srs_item(conn, associated_kanji="食",
-                        next_answer_date="2000-01-01 00:00:00")
-        conn.close()
-
-        # previously raised NameError: name 'kanji_col' is not defined
-        result = srs_app.get_study_kanji()
-        assert "食" in result
-
-
-# ---------------------------------------------------------------------------
 # get_review_stats
 # ---------------------------------------------------------------------------
 

@@ -54,6 +54,5 @@ class TestAppConfig:
 
     def test_defaults(self):
         cfg = AppConfig(keybinds={})
-        assert cfg.is_mobile is False
         assert cfg.ui_port == 8080
         assert cfg.debug_mode is False
