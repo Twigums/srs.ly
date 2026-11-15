@@ -1,4 +1,5 @@
 import sqlite3
+import pandas as pd
 import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -169,11 +170,32 @@ class TestAddTabPagePreservation:
         tab, _, _ = _make_add_tab(srs_app)
         assert tab.current_page == 1
 
-    def test_on_pagination_update_stores_page(self, srs_app):
+    def test_page_change_stores_page(self, srs_app):
         tab, _, _ = _make_add_tab(srs_app)
-        event = SimpleNamespace(args={"page": 3, "rowsPerPage": 100})
-        tab._on_pagination_update(event)
+        tab._on_page_change(3)
         assert tab.current_page == 3
+
+    def test_search_opens_table_on_remembered_page(self, mock_srs_app):
+        tab, _, mock_ui = _make_add_tab(mock_srs_app)
+        mock_srs_app.discover_new_kanji.return_value = pd.DataFrame([{
+            "Character": "食", "OnYomi": "ショク", "KunYomi": "た.べる", "Nanori": "", "Meaning": "eat",
+            "JlptLevel": 4, "WkLevel": 3, "MostUsedRank": 328, "NewspaperRank": 328,
+        }])
+        tab.item_type = SimpleNamespace(value=["kanji"])
+        tab.jlpt_levels = SimpleNamespace(value=[])
+        tab.kanji_search = tab.kana_search = tab.meaning_search = SimpleNamespace(value="")
+        tab.current_page = 4
+
+        with patch("src.nicegui.add_tab.ui", mock_ui), patch("src.nicegui.add_tab.PagedTable") as mock_table:
+            tab.update_search_results(reset_page=False)
+
+        kwargs = mock_table.call_args.kwargs
+        assert kwargs["page"] == 4
+        assert [row["Kanji"] for row in kwargs["rows"]] == ["食"]
+
+        # page changes in the table are remembered for the next search
+        kwargs["on_page_change"](2)
+        assert tab.current_page == 2
 
     def test_add_selected_items_preserves_current_page(self, srs_app):
         tab, _, _ = _make_add_tab(srs_app)

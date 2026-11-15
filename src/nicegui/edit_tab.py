@@ -3,6 +3,7 @@ import pandas as pd
 from nicegui import ui
 
 from src.dataclasses import AppConfig
+from src.nicegui.paged_table import PagedTable
 
 
 class EditTab(ui.element):
@@ -139,7 +140,8 @@ class EditTab(ui.element):
                         {"name": "nextanswer", "label": "Next Answer Date", "field": "Next Answer Date", "sortable": True},
                     ]
 
-                    table = ui.table(
+                    # only the page being shown is sent to the browser
+                    table = PagedTable(
                         rows = rows,
                         columns = columns,
                         column_defaults = {
@@ -149,7 +151,7 @@ class EditTab(ui.element):
                         row_key = "id",
                         selection = "multiple",
                         on_select = lambda e: self.render_inputs(e.selection),
-                        pagination = 100, # # of items to show on a page
+                        rows_per_page = 100,
                     ).classes("w-full vocab-table")
 
         return None

@@ -3,6 +3,7 @@ import pandas as pd
 from nicegui import ui
 
 from src.dataclasses import AppConfig
+from src.nicegui.paged_table import PagedTable
 
 
 # helper function to bfill, but for some reason there are funny "" or " " in the df?
@@ -96,8 +97,8 @@ class AddTab(ui.element):
                 on_click = lambda: self.add_custom_item(),
             )
 
-    def _on_pagination_update(self, e) -> None:
-        self.current_page = e.args.get("page", 1)
+    def _on_page_change(self, page: int) -> None:
+        self.current_page = page
 
     # updates the selection page every call
     # also resets the containers
@@ -248,7 +249,8 @@ class AddTab(ui.element):
                         {"name": "tags", "label": "Tags", "field": "Tags"},
                     ]
 
-                    table = ui.table(
+                    # only the page being shown is sent to the browser
+                    table = PagedTable(
                         rows = rows,
                         columns = columns,
                         column_defaults = {
@@ -258,9 +260,10 @@ class AddTab(ui.element):
                         row_key = "id",
                         selection = "multiple",
                         on_select = lambda e: self.render_inputs(e.selection),
-                        pagination = {"rowsPerPage": 100, "page": self.current_page},
+                        rows_per_page = 100,
+                        page = self.current_page,
+                        on_page_change = self._on_page_change,
                     ).classes("w-full vocab-table")
-                    table.on("update:pagination", self._on_pagination_update)
 
         return None
 
