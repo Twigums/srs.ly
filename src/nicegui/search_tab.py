@@ -50,7 +50,9 @@ class SearchTab(ui.element):
             self.canvas_size = (225, 160)
 
         else:
-            ui.notify("Google API not found. Did you remember to set the environment variable: 'GOOGLE_APPLICATION_CREDENTIALS'?")
+            # explain it inside this tab instead of with ui.notify:
+            # a notify here runs while the page is still being built, before the browser connects (#26)
+            ui.label("Handwriting search is disabled. Set the 'GOOGLE_APPLICATION_CREDENTIALS' environment variable to enable it.")
 
     async def predict(self):
         res = []
