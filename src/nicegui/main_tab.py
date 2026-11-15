@@ -27,7 +27,10 @@ class MainTab(ui.element):
             df_grade_counts, df_today_counts, df_ratio, _ = res
 
         else:
-            ui.notify("DB not connected.")
+            # messages go in the grid, not ui.notify: this runs while the page is
+            # still being built (before the browser connects) and again every 60 s
+            with self.main_page_grid:
+                ui.label("DB not connected.").classes("col-span-2")
 
             return False
 
@@ -37,7 +40,7 @@ class MainTab(ui.element):
         # i will use the houhou definitions (similar to wanikani)
         with self.main_page_grid:
             if grade_values == []:
-                ui.notify("Start adding items and reviewing to see stats!")
+                ui.label("Start adding items and reviewing to see stats!").classes("col-span-2")
 
                 return False
 
