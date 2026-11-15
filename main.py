@@ -2,11 +2,12 @@ import asyncio
 import os
 import tomllib
 
-from nicegui import ui, app
+from nicegui import ui, app, run
 
 from src.srs_app import SrsApp
 from src.dataclasses import AppConfig, BotConfig, Colors, SrsConfig
 from src.discord_bot import Bot
+from src.transcriber import Transcriber
 from src.nicegui.main_tab import MainTab
 from src.nicegui.review_tab import ReviewTab
 from src.nicegui.add_tab import AddTab
@@ -145,10 +146,23 @@ def main():
     srs_app = SrsApp(config_srs)
     srs_app.init_db()
 
+    # set up voice input for reviews
+    transcriber = None
+
+    if config["voice"]["enabled"]:
+        transcriber = Transcriber(config["voice"]["model"])
+
+        # load the model in the background so the first spoken answer doesn't wait on it
+        @app.on_startup
+        async def load_transcriber() -> None:
+            asyncio.create_task(run.io_bound(transcriber.load))
+
     config_app = AppConfig(
         srs_app = srs_app,
         debug_mode = config["debug_mode"],
-        keybinds = config["keybinds"]
+        keybinds = config["keybinds"],
+        transcriber = transcriber,
+        voice_max_record_seconds = config["voice"]["max_record_seconds"]
     )
 
     # set up Discord bot using the same srs_app instance

@@ -1,5 +1,5 @@
 import pytest
-from src.utils import expand_meanings
+from src.utils import expand_meanings, spoken_to_hiragana, spoken_to_meaning
 
 
 class TestExpandMeanings:
@@ -51,3 +51,40 @@ class TestExpandMeanings:
         # "(foo, baz) bar" -> ["foo bar", "baz bar", "bar"]
         result = expand_meanings("(foo, baz) bar")
         assert result == ["foo bar", "baz bar", "bar"]
+
+
+class TestSpokenToHiragana:
+    """Issue #43: Japanese transcripts are checked as hiragana."""
+
+    def test_kanji_converted_to_reading(self):
+        assert spoken_to_hiragana("帰ります") == "かえります"
+
+    def test_katakana_converted_to_hiragana(self):
+        assert spoken_to_hiragana("コーヒー") == "こーひー"
+
+    def test_punctuation_and_spaces_removed(self):
+        assert spoken_to_hiragana(" かえります。") == "かえります"
+        assert spoken_to_hiragana("まがります？") == "まがります"
+
+    def test_hiragana_unchanged(self):
+        assert spoken_to_hiragana("ほうがいい") == "ほうがいい"
+
+    def test_empty_string(self):
+        assert spoken_to_hiragana("") == ""
+
+
+class TestSpokenToMeaning:
+    """Issue #43: English transcripts lose the punctuation whisper adds."""
+
+    def test_lowercased_and_period_removed(self):
+        assert spoken_to_meaning("To compare.") == "to compare"
+
+    def test_apostrophes_and_hyphens_kept(self):
+        assert spoken_to_meaning("Isn’t it?") == "isn't it"
+        assert spoken_to_meaning("Well-known") == "well-known"
+
+    def test_whitespace_collapsed(self):
+        assert spoken_to_meaning("  to   go  home ") == "to go home"
+
+    def test_empty_string(self):
+        assert spoken_to_meaning("") == ""

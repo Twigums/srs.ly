@@ -16,6 +16,10 @@ class AppConfig:
     ui_storage_secret: str = "test"
     debug_mode: bool = False
 
+    # speech-to-text for review answers; voice input is off when this is None
+    transcriber: Optional[object] = None
+    voice_max_record_seconds: int = 8
+
 # definition for an interval in config.toml
 @dataclass
 class Interval:

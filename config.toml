@@ -37,6 +37,22 @@ debug_mode = false
 ignore_answer = "Backspace"
 add_as_valid_response = "="
 quit_after_current_set = "ctrl,e"
+# start/stop recording a spoken answer (use a key that isn't typed in answers)
+voice_input = "`"
+
+# voice input on the review tab
+# answers are recorded in the browser and transcribed on this machine with faster-whisper,
+# then put in the answer field to check and fix before pressing enter
+# the browser only allows the microphone over https (or localhost); see the readme
+[voice]
+enabled = true
+
+# whisper model: "base" is faster, "small" is more accurate (especially for japanese)
+# the model is downloaded on the first startup
+model = "small"
+
+# recording stops automatically after this many seconds
+max_record_seconds = 8
 
 [discord]
 token_env = "DISCORD_BOT_TOKEN"

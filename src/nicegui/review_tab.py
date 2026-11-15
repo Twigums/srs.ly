@@ -1,16 +1,74 @@
-from nicegui import app, ui
-from nicegui.events import KeyEventArguments
+import base64
+
+from nicegui import app, run, ui
+from nicegui.events import GenericEventArguments, KeyEventArguments
 from pyokaka import okaka
 from rapidfuzz import process, fuzz
 
 from src.dataclasses import AppConfig
-from src.utils import expand_meanings
+from src.utils import expand_meanings, spoken_to_hiragana, spoken_to_meaning
 from src.review_storage import (
     save_review_state,
     load_review_state,
     clear_review_state,
     has_review_state,
 )
+
+# whisper language for each card type
+VOICE_LANGUAGES = {"reading": "ja", "meaning": "en"}
+
+# records a spoken answer and sends it back to python as base64 audio
+# firefox has no speech recognition api, so the transcription happens server-side
+VOICE_SCRIPT = """
+<script>
+window.srslyVoice = {
+    recorder: null,
+    timer: null,
+
+    async start(maxSeconds) {
+        // a clicked button keeps focus, and ui.keyboard ignores keys while a button is focused
+        document.activeElement?.blur();
+
+        if (this.recorder) return;
+        if (!navigator.mediaDevices) {
+            emitEvent("voice_error", {message: "The microphone needs HTTPS (or localhost)."});
+            return;
+        }
+
+        let stream;
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({audio: true});
+        } catch (err) {
+            emitEvent("voice_error", {message: `Microphone unavailable: ${err.name}`});
+            return;
+        }
+
+        const chunks = [];
+        const recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = (event) => chunks.push(event.data);
+        recorder.onstop = () => {
+            stream.getTracks().forEach((track) => track.stop());
+            clearTimeout(this.timer);
+            this.recorder = null;
+
+            const reader = new FileReader();
+            reader.onloadend = () => emitEvent("voice_audio", {audio: reader.result.split(",")[1]});
+            reader.readAsDataURL(new Blob(chunks, {type: recorder.mimeType}));
+        };
+
+        this.recorder = recorder;
+        recorder.start();
+        this.timer = setTimeout(() => this.stop(), maxSeconds * 1000);
+    },
+
+    stop() {
+        document.activeElement?.blur();
+
+        if (this.recorder && this.recorder.state !== "inactive") this.recorder.stop();
+    },
+};
+</script>
+"""
 
 class ReviewTab(ui.element):
     def __init__(self, config: AppConfig):
@@ -20,6 +78,14 @@ class ReviewTab(ui.element):
         self.key_ignore_answer = config.keybinds["ignore_answer"]
         self.key_add_as_valid_response = config.keybinds["add_as_valid_response"]
         self.key_quit_after_current_set = config.keybinds["quit_after_current_set"][-1]
+        self.key_voice_input = config.keybinds["voice_input"]
+
+        # voice input: "idle" -> "recording" -> "transcribing" -> "idle"
+        # voice_card remembers which card the recording is for
+        self.transcriber = config.transcriber
+        self.voice_max_record_seconds = config.voice_max_record_seconds
+        self.voice_state = "idle"
+        self.voice_card = None
 
         # define the proper alphabet for review entry
         self.alphabet = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?-"
@@ -52,6 +118,14 @@ class ReviewTab(ui.element):
             self.user_romaji = ui.label("").classes("text-white") #.bind_visibility_to(self.keyboard, "active")
             self.user_hiragana = ui.label("").classes("japanese-main-text text-white")
 
+            # record an answer instead of typing it; only shown while reviewing
+            if self.transcriber:
+                with ui.row().classes("items-center") as self.voice_row:
+                    self.voice_button = ui.button(icon = "mic", on_click = self.toggle_voice).props("round flat color=white")
+                    self.voice_status = ui.label("").classes("text-white")
+
+                self.voice_row.bind_visibility_from(self.review_separator, "visible")
+
             self.res_display = ui.label("").classes("japanese-main-text text-white")
 
             self.correct_reading_display = ui.label("").classes("japanese-main-text text-white")
@@ -65,6 +139,11 @@ class ReviewTab(ui.element):
             self.review_separator.visible = False
             self.correct_reading_display.visible = False
             self.correct_meaning_display.visible = False
+
+        if self.transcriber:
+            ui.add_body_html(VOICE_SCRIPT)
+            ui.on("voice_audio", self.handle_voice_audio)
+            ui.on("voice_error", self.handle_voice_error)
 
         # Restore any in-progress session from per-user storage so that a
         # browser/connection refresh does not lose the user's place.
@@ -316,6 +395,11 @@ class ReviewTab(ui.element):
 
                     res = f"insert {key_str}"
 
+                # if the user clicks the voice input key:
+                # start recording their answer, or stop and transcribe it if already recording
+                case self.key_voice_input if self.transcriber:
+                    res = self.toggle_voice()
+
                 case _:
                     return None
 
@@ -418,5 +502,102 @@ class ReviewTab(ui.element):
 
         # persist item_dict changes so a refresh sees the latest answer progress
         save_review_state(app.storage.user, self.srs_app, item_dict=self.item_dict)
+
+        return None
+
+    """
+    functions for voice input
+    """
+
+    # start recording an answer, or stop and send it off for transcription if already recording
+    def toggle_voice(self) -> str | None:
+        if not self.current_item or self.res_display.text == self.incorrect_message:
+            return None
+
+        match self.voice_state:
+            case "idle":
+                self.voice_state = "recording"
+                self.voice_card = (self.current_item["ID"], self.current_item["card_type"])
+                self.voice_status.text = f"Recording... press {self.key_voice_input} to stop."
+                ui.run_javascript(f"srslyVoice.start({self.voice_max_record_seconds})")
+
+                return "start recording"
+
+            case "recording":
+                ui.run_javascript("srslyVoice.stop()")
+
+                return "stop recording"
+
+        return None
+
+    # a recording only applies to the card it was made for,
+    # and only while the user can still type (not while acknowledging a wrong answer)
+    def voice_card_is_current(self, voice_card: tuple | None) -> bool:
+        if not self.current_item or self.res_display.text == self.incorrect_message:
+            return False
+
+        return voice_card == (self.current_item["ID"], self.current_item["card_type"])
+
+    # transcribe a recorded answer and put it in the answer field
+    # nothing is submitted here: the user checks the text, fixes it by typing, then presses enter as usual
+    async def handle_voice_audio(self, e: GenericEventArguments) -> str | None:
+        voice_card = self.voice_card
+        self.voice_card = None
+
+        if not self.voice_card_is_current(voice_card):
+            self.voice_state = "idle"
+            self.voice_status.text = ""
+
+            return "stale recording"
+
+        card_type = voice_card[1]
+        audio = base64.b64decode(e.args["audio"])
+
+        self.voice_state = "transcribing"
+        self.voice_status.text = "Transcribing..."
+
+        # run whisper off the event loop so the ui (and the discord bot) keep responding
+        try:
+            text = await run.io_bound(self.transcriber.transcribe, audio, VOICE_LANGUAGES[card_type])
+
+        except Exception as err:
+            ui.notify(f"Transcription failed: {err}")
+
+            return "transcription failed"
+
+        finally:
+            self.voice_state = "idle"
+            self.voice_status.text = ""
+
+        # the user may have moved on while whisper was running
+        if not self.voice_card_is_current(voice_card):
+            return "stale recording"
+
+        match card_type:
+            case "reading":
+                answer = spoken_to_hiragana(text)
+
+            case "meaning":
+                answer = spoken_to_meaning(text)
+
+        if not answer:
+            ui.notify("Didn't catch that, try again.")
+
+            return "no speech"
+
+        # replace what was typed; the buffers are set the same way typing fills them,
+        # so backspace and further typing edit the transcription like any other answer
+        self.text_buffer = answer
+        self.kana_output = okaka.convert(answer)
+        self.user_romaji.text = answer
+        self.user_hiragana.text = answer
+
+        return "transcribed"
+
+    def handle_voice_error(self, e: GenericEventArguments) -> None:
+        self.voice_state = "idle"
+        self.voice_card = None
+        self.voice_status.text = ""
+        ui.notify(e.args["message"])
 
         return None

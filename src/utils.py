@@ -1,6 +1,14 @@
 import re
 
+import pykakasi
 from pyokaka import okaka
+
+# building the converter loads its dictionaries, so only do it once
+_kakasi = pykakasi.kakasi()
+
+# punctuation and spacing that speech-to-text adds around a spoken answer
+_spoken_japanese_punctuation = re.compile(r"[\s、。，．,.!?！？「」『』・…]")
+_spoken_english_punctuation = re.compile(r"[^a-z0-9 '-]")
 
 
 def romaji_to_kana(string: str) -> str:
@@ -74,3 +82,23 @@ def expand_meanings(meanings_str: str) -> list[str]:
     for segment in _split_top_level(meanings_str):
         result.extend(_expand_segment(segment))
     return result
+
+
+def spoken_to_hiragana(text: str) -> str:
+    """Convert a Japanese transcript to the hiragana that reading answers are checked against.
+
+    "帰ります。" -> "かえります"
+    "コーヒー"   -> "こーひー"
+    """
+    hiragana = "".join(item["hira"] for item in _kakasi.convert(text))
+    return _spoken_japanese_punctuation.sub("", hiragana)
+
+
+def spoken_to_meaning(text: str) -> str:
+    """Lowercase an English transcript and drop the punctuation speech-to-text adds.
+
+    "To compare." -> "to compare"
+    "Isn’t it?"   -> "isn't it"
+    """
+    cleaned = _spoken_english_punctuation.sub("", text.lower().replace("’", "'"))
+    return " ".join(cleaned.split())
