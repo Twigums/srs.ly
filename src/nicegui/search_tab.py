@@ -81,6 +81,9 @@ class SearchTab(ui.element):
         image_base64 = image.split(",")[1]
         image_bytes = base64.b64decode(image_base64)
 
+        # imported lazily like in __init__, which is the only other place `vision` exists
+        from google.cloud import vision
+
         vision_image = vision.Image(content = image_bytes)
         text_response = self.vision_client.text_detection(image = vision_image)
 
