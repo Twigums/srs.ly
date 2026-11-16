@@ -425,7 +425,6 @@ class SrsApp:
 
         # utc current timestamp
         current_datetime = datetime.now(timezone.utc)
-        next_answer_datetime = current_datetime + timedelta(hours = self.srs_interval["0"]["value"])
 
         # default definitions
         # timestamp as such for both readability and debugging
@@ -442,7 +441,7 @@ class SrsApp:
         is_deleted = 0
         last_update_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
         creation_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
-        next_answer_date = next_answer_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        next_answer_date = self.next_review_time(current_grade, current_datetime)
 
         match item["type"]:
             case "vocab":
@@ -456,6 +455,20 @@ class SrsApp:
         self.conn.commit()
 
         return None
+
+    # when an item at this grade is due next, in the db's timestamp format
+    # if the grade's value is -1, then the user has proved that they know this item well
+    # enough to stop reviewing, so there is no next date
+    # otherwise the unit from the toml is a timedelta argument ("hours", "days", "weeks", ...)
+    def next_review_time(self, grade: int, now: datetime) -> str | None:
+        interval = self.srs_interval[str(grade)]
+
+        if interval["value"] == -1:
+            return None
+
+        next_time = now + timedelta(**{interval["unit"]: interval["value"]})
+
+        return next_time.strftime("%Y-%m-%d %H:%M:%S")
 
     # record an answer to one of an item's two cards (reading and meaning)
     # item_dict holds a 1 for every correct answer and a 0 for every failed one,
@@ -512,24 +525,7 @@ class SrsApp:
             row["CurrentGrade"] = max(0, row["CurrentGrade"] - 1)
             row["FailureCount"] += 1
 
-        current_grade_key = str(row["CurrentGrade"])
-        current_grade_dict = self.srs_interval[current_grade_key]
-
-        # if -1, then the user has proved that they know this item well enough to stop reviewing
-        # otherwise, use the toml to determine when the next review date is
-        match current_grade_dict["value"]:
-            case -1:
-                review_time = None
-
-            case _:
-                match current_grade_dict["unit"]:
-                    case "hours":
-                        review_datetime = current_time + timedelta(hours = current_grade_dict["value"])
-
-                    case "days":
-                        review_datetime = current_time + timedelta(days = current_grade_dict["value"])
-
-                review_time = review_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        review_time = self.next_review_time(row["CurrentGrade"], current_time)
 
         self.conn.execute(q_update_item, (row["CurrentGrade"], row["FailureCount"], row["SuccessCount"], review_time))
         self.current_completed += 1 # increment counter for frontend

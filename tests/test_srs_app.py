@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from src.dataclasses import SrsConfig
 from src.srs_app import SrsApp
 
-from tests.conftest import insert_srs_item, TEST_SRS_INTERVAL
+from tests.conftest import insert_srs_item, make_nicegui_item, TEST_SRS_INTERVAL
 
 
 # ---------------------------------------------------------------------------
@@ -967,3 +967,50 @@ class TestSearchTextWithQuotes:
         df = srs_app.filter_study_items("vocab", condition="Meanings LIKE ?", params=["%one's%"])
 
         assert list(df["AssociatedVocab"]) == ["自分"]
+
+
+# ---------------------------------------------------------------------------
+# next review dates follow each grade's configured unit
+# ---------------------------------------------------------------------------
+
+class TestReviewIntervals:
+    def _next_date(self, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        value = conn.execute("SELECT NextAnswerDateISO FROM SrsEntrySet").fetchone()[0]
+        conn.close()
+        return value
+
+    def _hours_from_now(self, date_str):
+        due = datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+        return (due - datetime.now(timezone.utc)).total_seconds() / 3600
+
+    def test_new_item_uses_grade_zeros_unit(self, srs_app, tmp_dbs):
+        """add_review_item used to read grade 0's interval as hours, whatever its unit."""
+        srs_app.srs_interval = {**TEST_SRS_INTERVAL, "0": {"value": 2, "unit": "days"}}
+
+        srs_app.add_review_item(make_nicegui_item("vocab", "食べる", "to eat", "たべる"))
+
+        assert self._hours_from_now(self._next_date(tmp_dbs)) == pytest.approx(48, abs=0.1)
+
+    def test_answer_uses_any_timedelta_unit(self, srs_app, tmp_dbs):
+        """Units other than hours/days used to raise UnboundLocalError when answering."""
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        item_id = insert_srs_item(conn, associated_vocab="食べる", current_grade=0)
+        conn.close()
+        srs_app.srs_interval = {**TEST_SRS_INTERVAL, "1": {"value": 30, "unit": "minutes"}}
+
+        srs_app.update_review_item(item_id, True)
+
+        assert self._hours_from_now(self._next_date(tmp_dbs)) == pytest.approx(0.5, abs=0.02)
+
+    def test_last_grade_stops_reviews(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        item_id = insert_srs_item(conn, associated_vocab="食べる", current_grade=7)
+        conn.close()
+
+        srs_app.update_review_item(item_id, True)   # grade 8: value -1
+
+        assert self._next_date(tmp_dbs) is None
