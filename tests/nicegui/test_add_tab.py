@@ -353,3 +353,28 @@ class TestRenderInputsPreservation:
 
         kanji_calls = [c for c in mock_ui.input.call_args_list if c.args[0] == "Kanji"]
         assert kanji_calls[0].kwargs.get("value") == "新しい"
+
+
+# ---------------------------------------------------------------------------
+# JLPT column label
+# ---------------------------------------------------------------------------
+
+class TestJlptLabel:
+    def test_jlpt_level_shows_as_a_whole_number(self, mock_srs_app):
+        """A result without a JLPT level makes the column float, which showed "N5.0"."""
+        tab, _, mock_ui = _make_add_tab(mock_srs_app)
+        mock_srs_app.discover_new_vocab.return_value = pd.DataFrame([
+            {"KanjiWriting": "食べる", "KanaWriting": "たべる", "Meaning": "to eat", "IsCommon": 1, "JlptLevel": 5,
+             "WkLevel": None, "FrequencyRank": None, "WikiRank": 1, "ShortName": "v1"},
+            {"KanjiWriting": "鬱", "KanaWriting": "うつ", "Meaning": "depression", "IsCommon": 0, "JlptLevel": None,
+             "WkLevel": None, "FrequencyRank": None, "WikiRank": 2, "ShortName": "n"},
+        ])
+        tab.item_type = SimpleNamespace(value=["vocab"])
+        tab.jlpt_levels = SimpleNamespace(value=[])
+        tab.kanji_search = tab.kana_search = tab.meaning_search = SimpleNamespace(value="")
+
+        with patch("src.nicegui.add_tab.ui", mock_ui), patch("src.nicegui.add_tab.PagedTable") as mock_table:
+            tab.update_search_results()
+
+        labels = {row["Kanji"]: row["JLPT"] for row in mock_table.call_args.kwargs["rows"]}
+        assert labels == {"食べる": "N5", "鬱": ""}

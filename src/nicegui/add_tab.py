@@ -220,7 +220,8 @@ class AddTab(ui.element):
                             "Readings": row["Readings"],
                             "Meanings": ",".join([meaning.strip() for meaning in row["Meanings"].split(";")]),
                             "IsCommon": "✅" if row["IsCommon"] else "❌",
-                            "JLPT": f"N{row['JLPT']}" if not pd.isna(row["JLPT"]) else "",
+                            # int(): a missing level anywhere in the results makes the column float
+                            "JLPT": f"N{int(row['JLPT'])}" if not pd.isna(row["JLPT"]) else "",
                             "Wanikani": row.get("Wanikani", None),
                             "Frequency Rank": row.get("Frequency Rank", None),
                             "Wiki Rank": row.get("Wiki Rank", None),
