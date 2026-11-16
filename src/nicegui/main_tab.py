@@ -24,7 +24,7 @@ class MainTab(ui.element):
         res = self.srs_app.get_review_stats(utc_offset_minutes=utc_offset_minutes)
 
         if res:
-            df_grade_counts, df_today_counts, df_ratio, _ = res
+            df_grade_counts, df_today_counts, df_ratio, due_now_count = res
 
         else:
             # messages go in the grid, not ui.notify: this runs while the page is
@@ -34,7 +34,6 @@ class MainTab(ui.element):
 
             return False
 
-        df_reviews = self.srs_app.get_due_reviews()
         grade_values = df_grade_counts.iloc[:, -1].tolist()
 
         # i will use the houhou definitions (similar to wanikani)
@@ -45,7 +44,7 @@ class MainTab(ui.element):
                 return False
 
             ui.label("# of Reviews Due")
-            ui.label(f"{len(df_reviews)} / {df_today_counts.values[0][0]}")
+            ui.label(f"{due_now_count} / {df_today_counts.values[0][0]}")
 
             ui.label("Discovering")
             ui.label(grade_values[0] + grade_values[1])

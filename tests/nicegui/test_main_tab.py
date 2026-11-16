@@ -22,9 +22,9 @@ def _build_main_tab(mock_srs_app):
     return mock_ui, labels
 
 
-def _stats(grade_counts):
+def _stats(grade_counts, due_now = 0):
     df_grade_counts = pd.DataFrame({"val": range(len(grade_counts)), "count": grade_counts})
-    return df_grade_counts, pd.DataFrame([[3]]), pd.DataFrame({"ratio": [0.5]}), 0
+    return df_grade_counts, pd.DataFrame([[3]]), pd.DataFrame({"ratio": [0.5]}), due_now
 
 
 class TestMainTabMessages:
@@ -38,7 +38,6 @@ class TestMainTabMessages:
 
     def test_no_grades_is_shown_in_the_page(self, mock_srs_app):
         mock_srs_app.get_review_stats.return_value = _stats([])
-        mock_srs_app.get_due_reviews.return_value = pd.DataFrame()
 
         mock_ui, labels = _build_main_tab(mock_srs_app)
 
@@ -46,11 +45,13 @@ class TestMainTabMessages:
         assert "Start adding items and reviewing to see stats!" in labels
 
     def test_stats_are_shown(self, mock_srs_app):
-        mock_srs_app.get_review_stats.return_value = _stats([1, 2, 3, 4, 5, 6, 7, 8, 9])
-        mock_srs_app.get_due_reviews.return_value = pd.DataFrame({"ID": [1, 2]})
+        mock_srs_app.get_review_stats.return_value = _stats([1, 2, 3, 4, 5, 6, 7, 8, 9], due_now = 2)
 
         mock_ui, labels = _build_main_tab(mock_srs_app)
 
         mock_ui.notify.assert_not_called()
         assert "2 / 3" in labels
         assert "Set in Stone" in labels
+
+        # the due count comes from the stats query instead of loading every due review
+        mock_srs_app.get_due_reviews.assert_not_called()
