@@ -1,5 +1,6 @@
 import sqlite3
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from tests.conftest import insert_srs_item
 
@@ -133,3 +134,50 @@ class TestFilterStudyItemsSearch:
         self._seed(tmp_dbs, readings="r", meanings="to drink")
         df = srs_app.filter_study_items("vocab", condition="Meanings LIKE '%eat%'")
         assert df.empty
+
+
+# ---------------------------------------------------------------------------
+# EditTab search -> table rows
+# ---------------------------------------------------------------------------
+
+def _make_edit_tab(srs_app):
+    mock_ui = MagicMock()
+
+    def _cm(*args, **kwargs):
+        m = MagicMock()
+        m.__enter__ = MagicMock(return_value=m)
+        m.__exit__ = MagicMock(return_value=False)
+        return m
+
+    for attr in ("element", "card", "column", "row", "separator"):
+        getattr(mock_ui, attr).side_effect = _cm
+
+    with patch("src.nicegui.edit_tab.ui", mock_ui):
+        from src.nicegui.edit_tab import EditTab
+        tab = EditTab(SimpleNamespace(srs_app=srs_app))
+
+    return tab, mock_ui
+
+
+class TestEditTabSearchRows:
+    def test_rows_hold_each_items_fields(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        vocab_id = insert_srs_item(conn, associated_vocab="食べる", readings="たべる", meanings="to eat", current_grade=2)
+        kanji_id = insert_srs_item(conn, associated_kanji="食", readings="しょく", meanings="eat", current_grade=5)
+        conn.close()
+
+        tab, mock_ui = _make_edit_tab(srs_app)
+        tab.item_type = SimpleNamespace(value=["vocab", "kanji"])
+        tab.srs_levels = SimpleNamespace(value=[])
+        tab.meaning_search = tab.reading_search = SimpleNamespace(value="")
+
+        with patch("src.nicegui.edit_tab.ui", mock_ui), patch("src.nicegui.edit_tab.PagedTable") as mock_table:
+            tab.update_search_results()
+
+        rows = mock_table.call_args.kwargs["rows"]
+        assert [(r["Kanji"], r["Readings"], r["type"], r["Item_ID"], r["Current SRS Grade"]) for r in rows] == [
+            ("食べる", "たべる", "vocab", vocab_id, 2),
+            ("食", "しょく", "kanji", kanji_id, 5),
+        ]
+        assert len({r["id"] for r in rows}) == 2

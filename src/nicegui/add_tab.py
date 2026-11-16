@@ -233,7 +233,9 @@ class AddTab(ui.element):
                             "kunyomi": row.get("Kunyomi", None),
                             "nanori": row.get("Nanori", None),
                         }
-                        for i, row in display_df.iterrows()
+
+                        # to_dict is several times faster than iterrows on big searches
+                        for i, row in zip(display_df.index, display_df.to_dict("records"))
                     ]
 
                     # define columns to display

@@ -126,7 +126,9 @@ class EditTab(ui.element):
                             "type": row["Type"],
                             # Item_ID also exists and will be hidden
                         }
-                        for i, row in display_df.iterrows()
+
+                        # to_dict is several times faster than iterrows on big searches
+                        for i, row in zip(display_df.index, display_df.to_dict("records"))
                     ]
 
                     # define columns to display
