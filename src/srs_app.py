@@ -446,6 +446,23 @@ class SrsApp:
 
         return None
 
+    # record an answer to one of an item's two cards (reading and meaning)
+    # item_dict holds a 1 for every correct answer and a 0 for every failed one,
+    # so both cards right on the first try is [1, 1]; once both cards are right,
+    # the item is graded (passed only if nothing was failed) and the next due
+    # item joins the session
+    def record_answer(self, item_dict: dict[int, list[int]], item_id: int, is_correct: bool) -> None:
+        results = item_dict.setdefault(item_id, [])
+        results.append(int(is_correct))
+
+        if sum(results) == 2:
+            self.update_review_item(item_id, len(results) == 2)
+
+            del item_dict[item_id]
+            self.update_review_session()
+
+        return None
+
     # after an answer has been processed, edit the item's status in the db
     @check_conn
     def update_review_item(self, item_id: str, res: bool) -> None:

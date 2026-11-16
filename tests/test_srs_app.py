@@ -847,3 +847,71 @@ class TestCurrentReviewsIsDeque:
         removed = srs_app.current_reviews.popleft()
         assert removed == front
         assert srs_app.current_reviews[0] != front
+
+
+# ---------------------------------------------------------------------------
+# record_answer — shared by the web review tab and the Discord bot
+# ---------------------------------------------------------------------------
+
+class TestRecordAnswer:
+    def _seed(self, tmp_dbs, grade=3):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        item_id = insert_srs_item(conn, associated_vocab="食べる", current_grade=grade,
+                                  next_answer_date="2000-01-01 00:00:00")
+        conn.close()
+        return item_id
+
+    def _grade(self, tmp_dbs, item_id):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        grade = conn.execute("SELECT CurrentGrade FROM SrsEntrySet WHERE ID = ?", (item_id,)).fetchone()[0]
+        conn.close()
+        return grade
+
+    def test_first_card_is_only_recorded(self, srs_app, tmp_dbs):
+        item_id = self._seed(tmp_dbs)
+        item_dict = {}
+
+        srs_app.record_answer(item_dict, item_id, True)
+
+        assert item_dict == {item_id: [1]}
+        assert self._grade(tmp_dbs, item_id) == 3
+
+    def test_both_cards_right_first_time_raises_the_grade(self, srs_app, tmp_dbs):
+        item_id = self._seed(tmp_dbs, grade=3)
+        item_dict = {}
+
+        srs_app.record_answer(item_dict, item_id, True)
+        srs_app.record_answer(item_dict, item_id, True)
+
+        assert item_dict == {}
+        assert self._grade(tmp_dbs, item_id) == 4
+
+    def test_a_failed_card_lowers_the_grade_once_both_are_right(self, srs_app, tmp_dbs):
+        item_id = self._seed(tmp_dbs, grade=3)
+        item_dict = {}
+
+        srs_app.record_answer(item_dict, item_id, False)
+        srs_app.record_answer(item_dict, item_id, True)
+        assert self._grade(tmp_dbs, item_id) == 3   # not graded until both are right
+
+        srs_app.record_answer(item_dict, item_id, True)
+
+        assert item_dict == {}
+        assert self._grade(tmp_dbs, item_id) == 2
+
+    def test_finishing_an_item_brings_in_the_next_due_item(self, srs_app, tmp_dbs):
+        self._seed(tmp_dbs)
+        self._seed(tmp_dbs)
+        srs_app.max_reviews_at_once = 1
+        srs_app.start_review_session()
+        first_id = srs_app.current_reviews[0]["ID"]
+        assert len(srs_app.due_review_ids) == 1
+
+        item_dict = {}
+        srs_app.record_answer(item_dict, first_id, True)
+        srs_app.record_answer(item_dict, first_id, True)
+
+        assert srs_app.due_review_ids == []
+        assert {card["ID"] for card in srs_app.current_reviews} - {first_id}
