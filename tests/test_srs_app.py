@@ -915,3 +915,55 @@ class TestRecordAnswer:
 
         assert srs_app.due_review_ids == []
         assert {card["ID"] for card in srs_app.current_reviews} - {first_id}
+
+
+# ---------------------------------------------------------------------------
+# search text goes to SQLite as parameters
+# ---------------------------------------------------------------------------
+
+class TestSearchTextWithQuotes:
+    """An apostrophe in a search box (e.g. "one's") used to break the SQL."""
+
+    def test_vocab_meaning_search(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="自分", kana_writing="じぶん", meaning="one's self")
+        _insert_vocab(conn, kanji_writing="飲む", kana_writing="のむ", meaning="to drink")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(meaning_search="one's")
+
+        assert list(df["KanjiWriting"]) == ["自分"]
+
+    def test_kanji_meaning_search(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="己", meaning="one's self")
+        _insert_kanji(conn, character="水", meaning="water")
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji(meaning_search="one's")
+
+        assert list(df["Character"]) == ["己"]
+
+    def test_condition_params_come_before_the_meaning_search(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="飲む", kana_writing="のむ", meaning="to drink")
+        _insert_vocab(conn, kanji_writing="飲み物", kana_writing="のみもの", meaning="drink, beverage")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(condition="v.KanjiWriting = ?", params=["飲む"], meaning_search="drink")
+
+        assert list(df["KanjiWriting"]) == ["飲む"]
+
+    def test_filter_study_items_params(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        insert_srs_item(conn, associated_vocab="自分", meanings="one's self")
+        insert_srs_item(conn, associated_vocab="飲む", meanings="to drink")
+        conn.close()
+
+        df = srs_app.filter_study_items("vocab", condition="Meanings LIKE ?", params=["%one's%"])
+
+        assert list(df["AssociatedVocab"]) == ["自分"]

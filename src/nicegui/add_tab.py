@@ -126,18 +126,24 @@ class AddTab(ui.element):
         if "kanji" in selected_types:
             conditions = []
 
+            # typed text goes in params (one per ?), never into the sql itself
+            params = []
+
             if len(jlpt_condition) > 0:
                 conditions.append(f"k.JlptLevel IN ({jlpt_condition})")
 
             if kanji_condition not in ["", None]:
-                conditions.append(f"k.Character = '{kanji_condition}'")
+                conditions.append("k.Character = ?")
+                params.append(kanji_condition)
 
             if kana_condition not in ["", None]:
-                conditions.append(f"',' || k.OnYomi || ',' LIKE '%,{kana_condition},%'")
+                conditions.append("',' || k.OnYomi || ',' LIKE ?")
+                params.append(f"%,{kana_condition},%")
 
             condition = " AND ".join(conditions) if conditions else "1=1"
             df_kanji = self.srs_app.discover_new_kanji(
                 condition = condition,
+                params = params,
                 meaning_search = meaning_condition or None,
             )
 
@@ -167,19 +173,23 @@ class AddTab(ui.element):
         # handle vocab
         if "vocab" in selected_types:
             conditions = []
+            params = []
 
             if len(jlpt_condition) > 0:
                 conditions.append(f"v.JlptLevel IN ({jlpt_condition})")
 
             if kanji_condition not in ["", None]:
-                conditions.append(f"v.KanjiWriting = '{kanji_condition}'")
+                conditions.append("v.KanjiWriting = ?")
+                params.append(kanji_condition)
 
             if kana_condition not in ["", None]:
-                conditions.append(f"',' || v.KanaWriting || ',' LIKE '%,{kana_condition},%'")
+                conditions.append("',' || v.KanaWriting || ',' LIKE ?")
+                params.append(f"%,{kana_condition},%")
 
             condition = " AND ".join(conditions) if conditions else "1=1"
             df_vocab = self.srs_app.discover_new_vocab(
                 condition = condition,
+                params = params,
                 meaning_search = meaning_condition or None,
             )
 

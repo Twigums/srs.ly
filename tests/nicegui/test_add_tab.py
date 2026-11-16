@@ -378,3 +378,29 @@ class TestJlptLabel:
 
         labels = {row["Kanji"]: row["JLPT"] for row in mock_table.call_args.kwargs["rows"]}
         assert labels == {"食べる": "N5", "鬱": ""}
+
+
+# ---------------------------------------------------------------------------
+# search text
+# ---------------------------------------------------------------------------
+
+class TestSearchText:
+    def test_typed_text_is_passed_as_parameters(self, mock_srs_app):
+        """Typed text pasted into the SQL broke the search on an apostrophe."""
+        tab, _, mock_ui = _make_add_tab(mock_srs_app)
+        mock_srs_app.discover_new_kanji.return_value = pd.DataFrame()
+        mock_srs_app.discover_new_vocab.return_value = pd.DataFrame()
+        tab.item_type = SimpleNamespace(value=["kanji", "vocab"])
+        tab.jlpt_levels = SimpleNamespace(value=[5])
+        tab.kanji_search = SimpleNamespace(value="食'")
+        tab.kana_search = SimpleNamespace(value="た'")
+        tab.meaning_search = SimpleNamespace(value="one's")
+
+        with patch("src.nicegui.add_tab.ui", mock_ui):
+            tab.update_search_results()
+
+        for search in (mock_srs_app.discover_new_kanji, mock_srs_app.discover_new_vocab):
+            kwargs = search.call_args.kwargs
+            assert "食'" not in kwargs["condition"] and "た'" not in kwargs["condition"]
+            assert kwargs["params"] == ["食'", "%,た',%"]
+            assert kwargs["meaning_search"] == "one's"
