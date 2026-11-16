@@ -1,6 +1,6 @@
 # srs.ly
 
-Requires Python >= 3.10 due to `match` statements being used.
+Requires Python >= 3.11 (`main.py` reads `config.toml` with `tomllib`).
 
 ## Setup
 
@@ -26,12 +26,9 @@ The Discord bot starts automatically alongside the web UI if `DISCORD_BOT_TOKEN`
 Configurations are stored in the `config.toml` file, and all the variables should be self explanatory along with the comments provided. The `[discord]` section controls the bot token environment variable name and command prefix.
 
 ## How is the data stored?
-Data is stored in `./db`, and `KanjiDatabase.sqlite` contains a static copy of dictionary information. `SrsDatabase.sqlite` is the dynamic, user data that will change on updates. Lastly, `empty_test.db` is a very small database that contains a few rows for testing and implementation purposes.
+Data is stored in `./db`, and `KanjiDatabase.sqlite` contains a static copy of dictionary information. `SrsDatabase.sqlite` is the dynamic, user data that will change on updates. Lastly, `srs.db` is a very small database that contains a few rows for testing and implementation purposes.
 
 The database file names and naming schemes are directly from Houhou SRS. In the future, I might choose to restructure the datasets to suit my needs better.
-
-### Known Issues:
-If you run into `OSError: no library called "cairo-2" was found`: Install `libcairo2`.
 
 ## Discord Bot
 

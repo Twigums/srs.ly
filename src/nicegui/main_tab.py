@@ -4,7 +4,7 @@ from src.dataclasses import AppConfig
 
 
 class MainTab(ui.element):
-    def __init__(self, config):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
         self.srs_app = config.srs_app
@@ -24,25 +24,27 @@ class MainTab(ui.element):
         res = self.srs_app.get_review_stats(utc_offset_minutes=utc_offset_minutes)
 
         if res:
-            df_grade_counts, df_today_counts, df_ratio, _ = res
+            df_grade_counts, df_today_counts, df_ratio, due_now_count = res
 
         else:
-            ui.notify("DB not connected.")
+            # messages go in the grid, not ui.notify: this runs while the page is
+            # still being built (before the browser connects) and again every 60 s
+            with self.main_page_grid:
+                ui.label("DB not connected.").classes("col-span-2")
 
             return False
 
-        df_reviews = self.srs_app.get_due_reviews()
         grade_values = df_grade_counts.iloc[:, -1].tolist()
 
         # i will use the houhou definitions (similar to wanikani)
         with self.main_page_grid:
             if grade_values == []:
-                ui.notify("Start adding items and reviewing to see stats!")
+                ui.label("Start adding items and reviewing to see stats!").classes("col-span-2")
 
                 return False
 
             ui.label("# of Reviews Due")
-            ui.label(f"{len(df_reviews)} / {df_today_counts.values[0][0]}")
+            ui.label(f"{due_now_count} / {df_today_counts.values[0][0]}")
 
             ui.label("Discovering")
             ui.label(grade_values[0] + grade_values[1])

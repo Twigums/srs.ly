@@ -1,6 +1,7 @@
 import sqlite3
 import pytest
 from collections import deque
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -145,6 +146,9 @@ def mock_srs_app():
     m.len_review_ids = 5
     m.stop_updating_review = False
     m.current_reviews = deque()
+
+    # the real answer bookkeeping, on top of the mocked database calls
+    m.record_answer.side_effect = partial(SrsApp.record_answer, m)
     return m
 
 

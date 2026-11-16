@@ -3,10 +3,11 @@ import pandas as pd
 from nicegui import ui
 
 from src.dataclasses import AppConfig
+from src.nicegui.paged_table import PagedTable
 
 
 class EditTab(ui.element):
-    def __init__(self, config):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
         self.srs_app = config.srs_app
@@ -69,14 +70,19 @@ class EditTab(ui.element):
 
         conditions = []
 
+        # typed text goes in params (one per ?), never into the sql itself
+        params = []
+
         if len(srs_condition) != 0:
             conditions.append(f"{self.srs_app.col_dict['current_grade_col']} IN ({srs_condition})")
 
         if meaning_condition not in ["", None]:
-            conditions.append(f"Meanings LIKE '%{meaning_condition}%'")
+            conditions.append("Meanings LIKE ?")
+            params.append(f"%{meaning_condition}%")
 
         if reading_condition not in ["", None]:
-            conditions.append(f"Readings LIKE '%{reading_condition}%'")
+            conditions.append("Readings LIKE ?")
+            params.append(f"%{reading_condition}%")
 
         condition = " AND ".join(conditions) if conditions else "1=1"
 
@@ -84,7 +90,7 @@ class EditTab(ui.element):
 
         # handle kanji
         if "kanji" in selected_types:
-            df_kanji = self.srs_app.filter_study_items(item_type = "kanji", condition = condition)
+            df_kanji = self.srs_app.filter_study_items(item_type = "kanji", condition = condition, params = params)
 
             if not df_kanji.empty:
                 display_df_kanji = df_kanji[["ID", "AssociatedKanji", "Readings", "ReadingNote", "Meanings", "MeaningNote", "CurrentGrade", "NextAnswerDateISO"]].copy()
@@ -96,7 +102,7 @@ class EditTab(ui.element):
         # handle vocab
         if "vocab" in selected_types:
 
-            df_vocab = self.srs_app.filter_study_items(item_type = "vocab", condition = condition)
+            df_vocab = self.srs_app.filter_study_items(item_type = "vocab", condition = condition, params = params)
 
             if not df_vocab.empty:
                 display_df_vocab = df_vocab[["ID", "AssociatedVocab", "Readings", "ReadingNote", "Meanings", "MeaningNote", "CurrentGrade", "NextAnswerDateISO"]].copy()
@@ -125,7 +131,9 @@ class EditTab(ui.element):
                             "type": row["Type"],
                             # Item_ID also exists and will be hidden
                         }
-                        for i, row in display_df.iterrows()
+
+                        # to_dict is several times faster than iterrows on big searches
+                        for i, row in zip(display_df.index, display_df.to_dict("records"))
                     ]
 
                     # define columns to display
@@ -139,7 +147,8 @@ class EditTab(ui.element):
                         {"name": "nextanswer", "label": "Next Answer Date", "field": "Next Answer Date", "sortable": True},
                     ]
 
-                    table = ui.table(
+                    # only the page being shown is sent to the browser
+                    table = PagedTable(
                         rows = rows,
                         columns = columns,
                         column_defaults = {
@@ -149,7 +158,7 @@ class EditTab(ui.element):
                         row_key = "id",
                         selection = "multiple",
                         on_select = lambda e: self.render_inputs(e.selection),
-                        pagination = 100, # # of items to show on a page
+                        rows_per_page = 100,
                     ).classes("w-full vocab-table")
 
         return None
@@ -175,11 +184,6 @@ class EditTab(ui.element):
                 for i, item in enumerate(selected):
                     with self.input_container:
                         with ui.row():
-
-                            display_df_columns = ["Kanji", "Readings", "Reading Notes", "Meanings", "Current SRS Grade", "Next Answer Date"]
-                            # kanji items should have their readings
-                            # vocab items should have their tags
-
                             kanji_input = ui.input("Kanji", value = item["Kanji"])
                             readings_input = ui.input("Readings", value = item["Readings"])
                             reading_notes_input = ui.input("Reading Notes", value = item["Reading Notes"])

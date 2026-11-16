@@ -1,12 +1,8 @@
-import asyncio
 import base64
-import cairosvg
-import io
 import os
 
-from nicegui import ui, events
+from nicegui import ui
 from nicegui.events import KeyEventArguments, MouseEventArguments
-from PIL import Image
 
 from src.dataclasses import AppConfig
 
@@ -81,6 +77,9 @@ class SearchTab(ui.element):
         image_base64 = image.split(",")[1]
         image_bytes = base64.b64decode(image_base64)
 
+        # imported lazily like in __init__, which is the only other place `vision` exists
+        from google.cloud import vision
+
         vision_image = vision.Image(content = image_bytes)
         text_response = self.vision_client.text_detection(image = vision_image)
 
@@ -104,7 +103,6 @@ class SearchTab(ui.element):
     # "helper" function for keypresses
     def handle_key(self, e: KeyEventArguments) -> None:
         key = e.key
-        key_str = str(key)
 
         # use "keydown"; otherwise we get 2 keys per press
         if e.action.keydown:

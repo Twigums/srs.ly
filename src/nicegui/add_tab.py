@@ -3,6 +3,7 @@ import pandas as pd
 from nicegui import ui
 
 from src.dataclasses import AppConfig
+from src.nicegui.paged_table import PagedTable
 
 
 # helper function to bfill, but for some reason there are funny "" or " " in the df?
@@ -19,7 +20,7 @@ def first_valid(row: pd.core.series.Series) -> str | int | float | None:
     return None
 
 class AddTab(ui.element):
-    def __init__(self, config):
+    def __init__(self, config: AppConfig):
         super().__init__()
 
         self.srs_app = config.srs_app
@@ -96,8 +97,8 @@ class AddTab(ui.element):
                 on_click = lambda: self.add_custom_item(),
             )
 
-    def _on_pagination_update(self, e) -> None:
-        self.current_page = e.args.get("page", 1)
+    def _on_page_change(self, page: int) -> None:
+        self.current_page = page
 
     # updates the selection page every call
     # also resets the containers
@@ -125,18 +126,24 @@ class AddTab(ui.element):
         if "kanji" in selected_types:
             conditions = []
 
+            # typed text goes in params (one per ?), never into the sql itself
+            params = []
+
             if len(jlpt_condition) > 0:
                 conditions.append(f"k.JlptLevel IN ({jlpt_condition})")
 
             if kanji_condition not in ["", None]:
-                conditions.append(f"k.Character = '{kanji_condition}'")
+                conditions.append("k.Character = ?")
+                params.append(kanji_condition)
 
             if kana_condition not in ["", None]:
-                conditions.append(f"',' || k.OnYomi || ',' LIKE '%,{kana_condition},%'")
+                conditions.append("',' || k.OnYomi || ',' LIKE ?")
+                params.append(f"%,{kana_condition},%")
 
             condition = " AND ".join(conditions) if conditions else "1=1"
             df_kanji = self.srs_app.discover_new_kanji(
                 condition = condition,
+                params = params,
                 meaning_search = meaning_condition or None,
             )
 
@@ -166,19 +173,23 @@ class AddTab(ui.element):
         # handle vocab
         if "vocab" in selected_types:
             conditions = []
+            params = []
 
             if len(jlpt_condition) > 0:
                 conditions.append(f"v.JlptLevel IN ({jlpt_condition})")
 
             if kanji_condition not in ["", None]:
-                conditions.append(f"v.KanjiWriting = '{kanji_condition}'")
+                conditions.append("v.KanjiWriting = ?")
+                params.append(kanji_condition)
 
             if kana_condition not in ["", None]:
-                conditions.append(f"',' || v.KanaWriting || ',' LIKE '%,{kana_condition},%'")
+                conditions.append("',' || v.KanaWriting || ',' LIKE ?")
+                params.append(f"%,{kana_condition},%")
 
             condition = " AND ".join(conditions) if conditions else "1=1"
             df_vocab = self.srs_app.discover_new_vocab(
                 condition = condition,
+                params = params,
                 meaning_search = meaning_condition or None,
             )
 
@@ -219,7 +230,8 @@ class AddTab(ui.element):
                             "Readings": row["Readings"],
                             "Meanings": ",".join([meaning.strip() for meaning in row["Meanings"].split(";")]),
                             "IsCommon": "✅" if row["IsCommon"] else "❌",
-                            "JLPT": f"N{row['JLPT']}" if not pd.isna(row["JLPT"]) else "",
+                            # int(): a missing level anywhere in the results makes the column float
+                            "JLPT": f"N{int(row['JLPT'])}" if not pd.isna(row["JLPT"]) else "",
                             "Wanikani": row.get("Wanikani", None),
                             "Frequency Rank": row.get("Frequency Rank", None),
                             "Wiki Rank": row.get("Wiki Rank", None),
@@ -232,7 +244,9 @@ class AddTab(ui.element):
                             "kunyomi": row.get("Kunyomi", None),
                             "nanori": row.get("Nanori", None),
                         }
-                        for i, row in display_df.iterrows()
+
+                        # to_dict is several times faster than iterrows on big searches
+                        for i, row in zip(display_df.index, display_df.to_dict("records"))
                     ]
 
                     # define columns to display
@@ -248,7 +262,8 @@ class AddTab(ui.element):
                         {"name": "tags", "label": "Tags", "field": "Tags"},
                     ]
 
-                    table = ui.table(
+                    # only the page being shown is sent to the browser
+                    table = PagedTable(
                         rows = rows,
                         columns = columns,
                         column_defaults = {
@@ -258,9 +273,10 @@ class AddTab(ui.element):
                         row_key = "id",
                         selection = "multiple",
                         on_select = lambda e: self.render_inputs(e.selection),
-                        pagination = {"rowsPerPage": 100, "page": self.current_page},
+                        rows_per_page = 100,
+                        page = self.current_page,
+                        on_page_change = self._on_page_change,
                     ).classes("w-full vocab-table")
-                    table.on("update:pagination", self._on_pagination_update)
 
         return None
 

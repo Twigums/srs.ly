@@ -1,9 +1,11 @@
+import asyncio
 import pytest
 from collections import deque
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
-from src.discord_bot import Bot, AppState, romaji_to_kana
-from src.dataclasses import BotConfig, Colors
+from src.discord_bot import AppState
+from src.utils import romaji_to_kana
 
 
 # ---------------------------------------------------------------------------
@@ -251,3 +253,57 @@ class TestWrongEmbed:
         field_values = [f.value for f in embed.fields]
         assert any("to drink" in v for v in field_values)
 
+
+
+# ---------------------------------------------------------------------------
+# on_message: "add" after a wrong answer
+# ---------------------------------------------------------------------------
+
+def _run(coro):
+    # a private loop: asyncio.run() would unset the main thread's loop for later tests
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+class TestAddAfterWrongAnswer:
+    """Replying "add" to a wrong answer makes it a valid answer and counts the card as correct."""
+
+    def _answer_wrong_then_add(self, bot, mock_srs_app, item_dict):
+        channel = MagicMock()
+        channel.send = AsyncMock()
+        bot.state = AppState.RUNNING
+        bot.review_channel = channel
+        bot.current_card.card_type = "reading"
+        bot.current_card.review_type = "vocab"
+        bot.current_card.item_id = 1
+        bot.current_card.readings = "たべる"
+        bot.current_card.meanings = "to eat"
+        bot.item_dict = item_dict
+        mock_srs_app.current_reviews = deque([{"ID": 1}, {"ID": 2}])
+        mock_srs_app.get_current_item.return_value = None
+
+        # the wrong answer moves the card to the end of the queue
+        is_correct, _ = bot.process_answer("nomu", False)
+        assert is_correct is False
+        bot.showing_wrong_message = True
+
+        _run(bot.bot.on_message(SimpleNamespace(author = "someone", content = "add", channel = channel)))
+
+    def test_adds_the_answer_and_drops_the_wrong_card(self, bot, mock_srs_app):
+        self._answer_wrong_then_add(bot, mock_srs_app, {})
+
+        mock_srs_app.add_valid_response.assert_called_once_with(
+            "のむ", {"card_type": "reading", "ID": 1, "Readings": "たべる", "Meanings": "to eat"})
+        assert [card["ID"] for card in mock_srs_app.current_reviews] == [2]
+        assert bot.item_dict == {1: [1]}
+        assert bot.showing_wrong_message is False
+
+    def test_completes_the_item_when_the_other_card_was_right(self, bot, mock_srs_app):
+        self._answer_wrong_then_add(bot, mock_srs_app, {1: [1]})
+
+        mock_srs_app.update_review_item.assert_called_once_with(1, True)
+        mock_srs_app.update_review_session.assert_called_once()
+        assert 1 not in bot.item_dict

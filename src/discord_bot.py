@@ -85,18 +85,12 @@ class Bot:
 
         return None
 
-    def start(self) -> None:
-        self.bot.run(self.token)
-
-        return None
-
     async def start_async(self) -> None:
         await self.bot.start(self.token)
 
         return None
 
     def update_embed(self):
-        previous_text = self.current_card.kanji or self.current_card.vocab
         current_item = self.srs_app.get_current_item()
 
         if current_item is None:
@@ -192,10 +186,6 @@ class Bot:
         answer_kana = None
         lookup_readings = dict()
 
-        # keep track of progress for all items using a dictionary
-        if self.current_card.item_id not in self.item_dict:
-            self.item_dict[self.current_card.item_id] = []
-
         # retrieve all valid readings and compare the typed answer to the valid readings
         match self.current_card.card_type:
 
@@ -241,24 +231,7 @@ class Bot:
             self.srs_app.current_reviews.append(current_review)
 
         if to_append == 1 or will_submit:
-            self.item_dict[self.current_card.item_id].append(to_append)
-
-            # my way of marking if both the reading and meaning cards are marked as correct
-            # if so, then we should update the review item
-            # if the user gets both correct on the first try, the list would look like [1, 1]
-            # if they can't something wrong: [..., 1, ..., 1], where ... may be any length of 0s
-            # a faster solution is storing a tuple (a, b)
-            # if a = 2, then the user has completed both reviews
-            # b is a counter for how many tries the user has taken
-            if sum(self.item_dict[self.current_card.item_id]) == 2:
-                if len(self.item_dict[self.current_card.item_id]) == 2:
-                    self.srs_app.update_review_item(self.current_card.item_id, True)
-
-                else:
-                    self.srs_app.update_review_item(self.current_card.item_id, False)
-
-                del self.item_dict[self.current_card.item_id]
-                self.srs_app.update_review_session()
+            self.srs_app.record_answer(self.item_dict, self.current_card.item_id, to_append == 1)
 
         return (bool(to_append), valid_readings_str)
 
@@ -309,18 +282,7 @@ class Bot:
                             # same as srsly i guess...
                             self.srs_app.add_valid_response(self.previous_answer, current_item)
                             self.srs_app.current_reviews.pop()
-
-                            self.item_dict[self.current_card.item_id].append(1)
-
-                            # please for the love of god make this more optimized
-                            if sum(self.item_dict[self.current_card.item_id]) == 2:
-                                if len(self.item_dict[self.current_card.item_id]) == 2:
-                                    self.srs_app.update_review_item(self.current_card.item_id, True)
-                                else:
-                                    self.srs_app.update_review_item(self.current_card.item_id, False)
-
-                                del self.item_dict[self.current_card.item_id]
-                                self.srs_app.update_review_session()
+                            self.srs_app.record_answer(self.item_dict, self.current_card.item_id, True)
 
                             embed = self.update_embed()
                             self._clean_buffer()

@@ -1,8 +1,9 @@
 import sqlite3
+import pandas as pd
 import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from tests.conftest import insert_srs_item, make_nicegui_item
 
@@ -169,11 +170,32 @@ class TestAddTabPagePreservation:
         tab, _, _ = _make_add_tab(srs_app)
         assert tab.current_page == 1
 
-    def test_on_pagination_update_stores_page(self, srs_app):
+    def test_page_change_stores_page(self, srs_app):
         tab, _, _ = _make_add_tab(srs_app)
-        event = SimpleNamespace(args={"page": 3, "rowsPerPage": 100})
-        tab._on_pagination_update(event)
+        tab._on_page_change(3)
         assert tab.current_page == 3
+
+    def test_search_opens_table_on_remembered_page(self, mock_srs_app):
+        tab, _, mock_ui = _make_add_tab(mock_srs_app)
+        mock_srs_app.discover_new_kanji.return_value = pd.DataFrame([{
+            "Character": "食", "OnYomi": "ショク", "KunYomi": "た.べる", "Nanori": "", "Meaning": "eat",
+            "JlptLevel": 4, "WkLevel": 3, "MostUsedRank": 328, "NewspaperRank": 328,
+        }])
+        tab.item_type = SimpleNamespace(value=["kanji"])
+        tab.jlpt_levels = SimpleNamespace(value=[])
+        tab.kanji_search = tab.kana_search = tab.meaning_search = SimpleNamespace(value="")
+        tab.current_page = 4
+
+        with patch("src.nicegui.add_tab.ui", mock_ui), patch("src.nicegui.add_tab.PagedTable") as mock_table:
+            tab.update_search_results(reset_page=False)
+
+        kwargs = mock_table.call_args.kwargs
+        assert kwargs["page"] == 4
+        assert [row["Kanji"] for row in kwargs["rows"]] == ["食"]
+
+        # page changes in the table are remembered for the next search
+        kwargs["on_page_change"](2)
+        assert tab.current_page == 2
 
     def test_add_selected_items_preserves_current_page(self, srs_app):
         tab, _, _ = _make_add_tab(srs_app)
@@ -331,3 +353,54 @@ class TestRenderInputsPreservation:
 
         kanji_calls = [c for c in mock_ui.input.call_args_list if c.args[0] == "Kanji"]
         assert kanji_calls[0].kwargs.get("value") == "新しい"
+
+
+# ---------------------------------------------------------------------------
+# JLPT column label
+# ---------------------------------------------------------------------------
+
+class TestJlptLabel:
+    def test_jlpt_level_shows_as_a_whole_number(self, mock_srs_app):
+        """A result without a JLPT level makes the column float, which showed "N5.0"."""
+        tab, _, mock_ui = _make_add_tab(mock_srs_app)
+        mock_srs_app.discover_new_vocab.return_value = pd.DataFrame([
+            {"KanjiWriting": "食べる", "KanaWriting": "たべる", "Meaning": "to eat", "IsCommon": 1, "JlptLevel": 5,
+             "WkLevel": None, "FrequencyRank": None, "WikiRank": 1, "ShortName": "v1"},
+            {"KanjiWriting": "鬱", "KanaWriting": "うつ", "Meaning": "depression", "IsCommon": 0, "JlptLevel": None,
+             "WkLevel": None, "FrequencyRank": None, "WikiRank": 2, "ShortName": "n"},
+        ])
+        tab.item_type = SimpleNamespace(value=["vocab"])
+        tab.jlpt_levels = SimpleNamespace(value=[])
+        tab.kanji_search = tab.kana_search = tab.meaning_search = SimpleNamespace(value="")
+
+        with patch("src.nicegui.add_tab.ui", mock_ui), patch("src.nicegui.add_tab.PagedTable") as mock_table:
+            tab.update_search_results()
+
+        labels = {row["Kanji"]: row["JLPT"] for row in mock_table.call_args.kwargs["rows"]}
+        assert labels == {"食べる": "N5", "鬱": ""}
+
+
+# ---------------------------------------------------------------------------
+# search text
+# ---------------------------------------------------------------------------
+
+class TestSearchText:
+    def test_typed_text_is_passed_as_parameters(self, mock_srs_app):
+        """Typed text pasted into the SQL broke the search on an apostrophe."""
+        tab, _, mock_ui = _make_add_tab(mock_srs_app)
+        mock_srs_app.discover_new_kanji.return_value = pd.DataFrame()
+        mock_srs_app.discover_new_vocab.return_value = pd.DataFrame()
+        tab.item_type = SimpleNamespace(value=["kanji", "vocab"])
+        tab.jlpt_levels = SimpleNamespace(value=[5])
+        tab.kanji_search = SimpleNamespace(value="食'")
+        tab.kana_search = SimpleNamespace(value="た'")
+        tab.meaning_search = SimpleNamespace(value="one's")
+
+        with patch("src.nicegui.add_tab.ui", mock_ui):
+            tab.update_search_results()
+
+        for search in (mock_srs_app.discover_new_kanji, mock_srs_app.discover_new_vocab):
+            kwargs = search.call_args.kwargs
+            assert "食'" not in kwargs["condition"] and "た'" not in kwargs["condition"]
+            assert kwargs["params"] == ["食'", "%,た',%"]
+            assert kwargs["meaning_search"] == "one's"

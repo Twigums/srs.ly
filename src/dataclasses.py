@@ -7,9 +7,6 @@ from typing import Optional, Dict, Literal, List, Tuple
 class AppConfig:
     keybinds: Dict[str, str]
 
-    # check if user is using mobile or not
-    is_mobile: bool = False
-
     srs_app: Optional[object] = None
     ui_port: int = 8080
     ui_web_title: str = "srs.ly"

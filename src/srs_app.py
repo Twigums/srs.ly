@@ -81,15 +81,9 @@ class SrsApp:
             self.conn.execute("PRAGMA journal_mode = WAL")
             self.conn.execute("PRAGMA busy_timeout = 30000")
 
+        # a path sqlite can't open (e.g. a missing folder) is a sqlite3.Error too
         except sqlite3.Error as e:
-            raise Exception(f"Conn failed: {e}")
-
-            return False
-
-        except FileNotFoundError as e:
-            raise Exception("File not found: {e}")
-
-            return False
+            raise Exception(f"Conn failed: {e}") from e
 
         self.cursor = self.conn.cursor()
         self.cursor.execute(f"ATTACH DATABASE '{self.path_to_srs_db}' AS {self.id_srs_db};")
@@ -205,41 +199,9 @@ class SrsApp:
         df = pd.read_sql_query(q, self.conn)
         return df
 
-    # returns df of all vocabs present in the user's srs review
+    # condition is SQL; text the user typed goes in params, one value per ? in condition
     @check_conn
-    def get_study_vocab(self) -> set:
-        q = f"""
-            SELECT {self.col_dict["vocab_col"]} FROM {self.name_srs_table};
-            """
-
-        df = pd.read_sql_query(q, self.conn)
-
-        all_vocabs = set(df[self.col_dict["vocab_col"]].dropna())
-
-        return all_vocabs
-
-    # returns df of all kanji present in the user's srs review
-    # this is a set of both their vocab and kanji
-    # i should also blacklist all the hiragana and katakana, but it is what it is
-    @check_conn
-    def get_study_kanji(self) -> set:
-        q = f"""
-            SELECT {self.col_dict["vocab_col"]}, {self.col_dict["kanji_col"]} FROM {self.name_srs_table}
-            WHERE LENGTH({self.col_dict["vocab_col"]}) = 1
-            OR LENGTH({self.col_dict["kanji_col"]}) = 1;
-            """
-
-        df = pd.read_sql_query(q, self.conn)
-
-        vocab_kanjis = set(df[self.col_dict["vocab_col"]].dropna())
-        kanji_kanjis = set(df[self.col_dict["kanji_col"]].dropna())
-
-        all_kanjis = vocab_kanjis.union(kanji_kanjis)
-
-        return all_kanjis
-
-    @check_conn
-    def filter_study_items(self, item_type: str, condition: str = "1=1") -> DataFrame:
+    def filter_study_items(self, item_type: str, condition: str = "1=1", params: list | tuple = ()) -> DataFrame:
         match item_type:
             case "vocab":
                 item_col = self.col_dict["vocab_col"]
@@ -256,23 +218,28 @@ class SrsApp:
             AND {condition};
             """
 
-        df = pd.read_sql_query(q, self.conn)
+        df = pd.read_sql_query(q, self.conn, params = params)
         return df
 
     # returns df of vocab that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
+    # condition is SQL; text the user typed goes in params, one value per ? in condition
     @check_conn
-    def discover_new_vocab(self, condition: str = "1=1", meaning_search: str | None = None) -> DataFrame:
+    def discover_new_vocab(self, condition: str = "1=1", meaning_search: str | None = None, params: list | tuple = ()) -> DataFrame:
+        params = list(params)
         meaning_clause = ""
         if meaning_search not in (None, ""):
             meaning_clause = (
-                f"AND EXISTS ("
-                f"SELECT 1 FROM VocabEntityVocabMeaning AS _vl"
-                f" JOIN VocabMeaningSet AS _vm ON _vl.Meanings_ID = _vm.ID"
-                f" WHERE _vl.VocabEntity_ID = v.ID"
-                f" AND _vm.Meaning LIKE '%{meaning_search}%'"
-                f")"
+                "AND EXISTS ("
+                "SELECT 1 FROM VocabEntityVocabMeaning AS _vl"
+                " JOIN VocabMeaningSet AS _vm ON _vl.Meanings_ID = _vm.ID"
+                " WHERE _vl.VocabEntity_ID = v.ID"
+                " AND _vm.Meaning LIKE ?"
+                ")"
             )
+
+            # comes after condition in the query, so its value goes after condition's
+            params.append(f"%{meaning_search}%")
 
         q = f"""
             WITH v_except AS (
@@ -291,22 +258,27 @@ class SrsApp:
             JOIN VocabCategorySet as v_cat ON v_cat.ID = v_cat_link.Categories_ID;
             """
 
-        df = pd.read_sql_query(q, self.conn)
+        df = pd.read_sql_query(q, self.conn, params = params)
         return df
 
     # returns df of kanji that isn't present in our reviews given conditions
     # sort after using pd.sort_values to put nans at the end
+    # condition is SQL; text the user typed goes in params, one value per ? in condition
     @check_conn
-    def discover_new_kanji(self, condition: str = "1=1", meaning_search: str | None = None) -> DataFrame:
+    def discover_new_kanji(self, condition: str = "1=1", meaning_search: str | None = None, params: list | tuple = ()) -> DataFrame:
+        params = list(params)
         meaning_clause = ""
         if meaning_search not in (None, ""):
             meaning_clause = (
-                f"AND EXISTS ("
-                f"SELECT 1 FROM KanjiMeaningSet AS _km"
-                f" WHERE _km.Kanji_ID = k.ID"
-                f" AND _km.Meaning LIKE '%{meaning_search}%'"
-                f")"
+                "AND EXISTS ("
+                "SELECT 1 FROM KanjiMeaningSet AS _km"
+                " WHERE _km.Kanji_ID = k.ID"
+                " AND _km.Meaning LIKE ?"
+                ")"
             )
+
+            # comes after condition in the query, so its value goes after condition's
+            params.append(f"%{meaning_search}%")
 
         q = f"""
             WITH k_except AS (
@@ -322,7 +294,7 @@ class SrsApp:
             JOIN KanjiMeaningSet AS k_meanings ON k_meanings.Kanji_ID = k.ID;
             """
 
-        df = pd.read_sql_query(q, self.conn)
+        df = pd.read_sql_query(q, self.conn, params = params)
         return df
 
     # initialize the review session
@@ -453,7 +425,6 @@ class SrsApp:
 
         # utc current timestamp
         current_datetime = datetime.now(timezone.utc)
-        next_answer_datetime = current_datetime + timedelta(hours = self.srs_interval["0"]["value"])
 
         # default definitions
         # timestamp as such for both readability and debugging
@@ -470,7 +441,7 @@ class SrsApp:
         is_deleted = 0
         last_update_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
         creation_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
-        next_answer_date = next_answer_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        next_answer_date = self.next_review_time(current_grade, current_datetime)
 
         match item["type"]:
             case "vocab":
@@ -482,6 +453,37 @@ class SrsApp:
         # big tuple...
         self.conn.execute(q, (meanings, readings, current_grade, failure_count, success_count, associated_vocab, associated_kanji, meaning_notes, reading_notes, tags, is_deleted, last_update_date, creation_date, next_answer_date))
         self.conn.commit()
+
+        return None
+
+    # when an item at this grade is due next, in the db's timestamp format
+    # if the grade's value is -1, then the user has proved that they know this item well
+    # enough to stop reviewing, so there is no next date
+    # otherwise the unit from the toml is a timedelta argument ("hours", "days", "weeks", ...)
+    def next_review_time(self, grade: int, now: datetime) -> str | None:
+        interval = self.srs_interval[str(grade)]
+
+        if interval["value"] == -1:
+            return None
+
+        next_time = now + timedelta(**{interval["unit"]: interval["value"]})
+
+        return next_time.strftime("%Y-%m-%d %H:%M:%S")
+
+    # record an answer to one of an item's two cards (reading and meaning)
+    # item_dict holds a 1 for every correct answer and a 0 for every failed one,
+    # so both cards right on the first try is [1, 1]; once both cards are right,
+    # the item is graded (passed only if nothing was failed) and the next due
+    # item joins the session
+    def record_answer(self, item_dict: dict[int, list[int]], item_id: int, is_correct: bool) -> None:
+        results = item_dict.setdefault(item_id, [])
+        results.append(int(is_correct))
+
+        if sum(results) == 2:
+            self.update_review_item(item_id, len(results) == 2)
+
+            del item_dict[item_id]
+            self.update_review_session()
 
         return None
 
@@ -523,24 +525,7 @@ class SrsApp:
             row["CurrentGrade"] = max(0, row["CurrentGrade"] - 1)
             row["FailureCount"] += 1
 
-        current_grade_key = str(row["CurrentGrade"])
-        current_grade_dict = self.srs_interval[current_grade_key]
-
-        # if -1, then the user has proved that they know this item well enough to stop reviewing
-        # otherwise, use the toml to determine when the next review date is
-        match current_grade_dict["value"]:
-            case -1:
-                review_time = None
-
-            case _:
-                match current_grade_dict["unit"]:
-                    case "hours":
-                        review_datetime = current_time + timedelta(hours = current_grade_dict["value"])
-
-                    case "days":
-                        review_datetime = current_time + timedelta(days = current_grade_dict["value"])
-
-                review_time = review_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        review_time = self.next_review_time(row["CurrentGrade"], current_time)
 
         self.conn.execute(q_update_item, (row["CurrentGrade"], row["FailureCount"], row["SuccessCount"], review_time))
         self.current_completed += 1 # increment counter for frontend

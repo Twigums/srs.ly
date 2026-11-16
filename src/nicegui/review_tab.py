@@ -233,34 +233,17 @@ class ReviewTab(ui.element):
                 # the user wants to add what they typed as an additional meaning and acknowledges they got the card correct
                 case self.key_add_as_valid_response if len(self.text_buffer) > 0 and self.res_display.text == self.incorrect_message:
                     self.srs_app.add_valid_response(self.user_hiragana.text, self.current_item)
+
+                    # the wrong answer moved this card to the end of the queue
                     self.srs_app.current_reviews.pop()
-                    self.item_dict[item_id].append(1)
-
-                    # there has to be a better way of doing this
-                    # i can't call a function since i dont think it would be able to delete the dictionary key?
-                    # more testing is needed
-                    if sum(self.item_dict[item_id]) == 2:
-                        if len(self.item_dict[item_id]) == 2:
-                            self.srs_app.update_review_item(item_id, True)
-
-                        else:
-                            self.srs_app.update_review_item(item_id, False)
-
-                        del self.item_dict[item_id]
-                        self.srs_app.update_review_session()
+                    self.srs_app.record_answer(self.item_dict, item_id, True)
 
                     self.res_display.text = f"Added '{self.user_hiragana.text}' to {card_type}."
 
                     self.correct_reading_display.visible = False
                     self.correct_meaning_display.visible = False
 
-                    # current_index past the wrong card. clean_card() would increment it
-                    # again, skipping the next card in the queue (issue #37)
-                    self.text_buffer = ""
-                    self.kana_output = ""
-                    self.user_romaji.text = ""
-                    self.user_hiragana.text = ""
-                    self.update_review_display()
+                    self.clean_card()
 
                     return "add answer"
 
@@ -318,18 +301,17 @@ class ReviewTab(ui.element):
                 case _:
                     return None
 
+            self.kana_output = okaka.convert(self.text_buffer)
+            self.user_romaji.text = self.text_buffer
+
             # if the card type is reading, then we should show a kana output
             # if the card type is meaning, then we should show the text buffer
             match card_type:
                 case "reading":
-                    self.kana_output = okaka.convert(self.text_buffer)
                     self.user_hiragana.text = self.kana_output
 
                 case "meaning":
                     self.user_hiragana.text = self.text_buffer
-
-            self.kana_output = okaka.convert(self.text_buffer)
-            self.user_romaji.text = self.text_buffer
 
             # in the event of bugfixing/logging, printing res might be useful
             return res
@@ -344,10 +326,6 @@ class ReviewTab(ui.element):
         answer_stripped = answer.strip()
         answer_lower = answer_stripped.lower()
         lookup_readings = dict()
-
-        # keep track of progress for all items using a dictionary
-        if item_id not in self.item_dict:
-            self.item_dict[item_id] = []
 
         # retrieve all valid readings and compare the typed answer to the valid readings
         match card_type:
@@ -365,7 +343,6 @@ class ReviewTab(ui.element):
 
                 if answer_stripped in lookup_readings:
                     matching_score = 100
-                    matching_reading = answer_stripped
 
                 else:
                     matching_score = 0
@@ -396,24 +373,7 @@ class ReviewTab(ui.element):
 
         # only submit if we're ready to submit or if the user got it correct
         if to_append == 1 or will_submit:
-            self.item_dict[item_id].append(to_append)
-
-            # my way of marking if both the reading and meaning cards are marked as correct
-            # if so, then we should update the review item
-            # if the user gets both correct on the first try, the list would look like [1, 1]
-            # if they can't something wrong: [..., 1, ..., 1], where ... may be any length of 0s
-            # a faster solution is storing a tuple (a, b)
-            # if a = 2, then the user has completed both reviews
-            # b is a counter for how many tries the user has taken
-            if sum(self.item_dict[item_id]) == 2:
-                if len(self.item_dict[item_id]) == 2:
-                    self.srs_app.update_review_item(item_id, True)
-
-                else:
-                    self.srs_app.update_review_item(item_id, False)
-
-                del self.item_dict[item_id]
-                self.srs_app.update_review_session()
+            self.srs_app.record_answer(self.item_dict, item_id, to_append == 1)
 
         # persist item_dict changes so a refresh sees the latest answer progress
         save_review_state(app.storage.user, self.srs_app, item_dict=self.item_dict)

@@ -4,9 +4,9 @@ from collections import deque
 from datetime import datetime, timezone
 
 from src.dataclasses import SrsConfig
-from src.srs_app import SrsApp, check_conn
+from src.srs_app import SrsApp
 
-from tests.conftest import insert_srs_item, TEST_SRS_INTERVAL
+from tests.conftest import insert_srs_item, make_nicegui_item, TEST_SRS_INTERVAL
 
 
 # ---------------------------------------------------------------------------
@@ -483,23 +483,6 @@ class TestAddValidResponse:
 
 
 # ---------------------------------------------------------------------------
-# get_study_kanji (regression for kanji_col NameError bug)
-# ---------------------------------------------------------------------------
-
-class TestGetStudyKanji:
-    def test_does_not_raise_name_error(self, srs_app, tmp_dbs):
-        _, srs_db = tmp_dbs
-        conn = sqlite3.connect(srs_db)
-        insert_srs_item(conn, associated_kanji="食",
-                        next_answer_date="2000-01-01 00:00:00")
-        conn.close()
-
-        # previously raised NameError: name 'kanji_col' is not defined
-        result = srs_app.get_study_kanji()
-        assert "食" in result
-
-
-# ---------------------------------------------------------------------------
 # get_review_stats
 # ---------------------------------------------------------------------------
 
@@ -864,3 +847,170 @@ class TestCurrentReviewsIsDeque:
         removed = srs_app.current_reviews.popleft()
         assert removed == front
         assert srs_app.current_reviews[0] != front
+
+
+# ---------------------------------------------------------------------------
+# record_answer — shared by the web review tab and the Discord bot
+# ---------------------------------------------------------------------------
+
+class TestRecordAnswer:
+    def _seed(self, tmp_dbs, grade=3):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        item_id = insert_srs_item(conn, associated_vocab="食べる", current_grade=grade,
+                                  next_answer_date="2000-01-01 00:00:00")
+        conn.close()
+        return item_id
+
+    def _grade(self, tmp_dbs, item_id):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        grade = conn.execute("SELECT CurrentGrade FROM SrsEntrySet WHERE ID = ?", (item_id,)).fetchone()[0]
+        conn.close()
+        return grade
+
+    def test_first_card_is_only_recorded(self, srs_app, tmp_dbs):
+        item_id = self._seed(tmp_dbs)
+        item_dict = {}
+
+        srs_app.record_answer(item_dict, item_id, True)
+
+        assert item_dict == {item_id: [1]}
+        assert self._grade(tmp_dbs, item_id) == 3
+
+    def test_both_cards_right_first_time_raises_the_grade(self, srs_app, tmp_dbs):
+        item_id = self._seed(tmp_dbs, grade=3)
+        item_dict = {}
+
+        srs_app.record_answer(item_dict, item_id, True)
+        srs_app.record_answer(item_dict, item_id, True)
+
+        assert item_dict == {}
+        assert self._grade(tmp_dbs, item_id) == 4
+
+    def test_a_failed_card_lowers_the_grade_once_both_are_right(self, srs_app, tmp_dbs):
+        item_id = self._seed(tmp_dbs, grade=3)
+        item_dict = {}
+
+        srs_app.record_answer(item_dict, item_id, False)
+        srs_app.record_answer(item_dict, item_id, True)
+        assert self._grade(tmp_dbs, item_id) == 3   # not graded until both are right
+
+        srs_app.record_answer(item_dict, item_id, True)
+
+        assert item_dict == {}
+        assert self._grade(tmp_dbs, item_id) == 2
+
+    def test_finishing_an_item_brings_in_the_next_due_item(self, srs_app, tmp_dbs):
+        self._seed(tmp_dbs)
+        self._seed(tmp_dbs)
+        srs_app.max_reviews_at_once = 1
+        srs_app.start_review_session()
+        first_id = srs_app.current_reviews[0]["ID"]
+        assert len(srs_app.due_review_ids) == 1
+
+        item_dict = {}
+        srs_app.record_answer(item_dict, first_id, True)
+        srs_app.record_answer(item_dict, first_id, True)
+
+        assert srs_app.due_review_ids == []
+        assert {card["ID"] for card in srs_app.current_reviews} - {first_id}
+
+
+# ---------------------------------------------------------------------------
+# search text goes to SQLite as parameters
+# ---------------------------------------------------------------------------
+
+class TestSearchTextWithQuotes:
+    """An apostrophe in a search box (e.g. "one's") used to break the SQL."""
+
+    def test_vocab_meaning_search(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="自分", kana_writing="じぶん", meaning="one's self")
+        _insert_vocab(conn, kanji_writing="飲む", kana_writing="のむ", meaning="to drink")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(meaning_search="one's")
+
+        assert list(df["KanjiWriting"]) == ["自分"]
+
+    def test_kanji_meaning_search(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_kanji(conn, character="己", meaning="one's self")
+        _insert_kanji(conn, character="水", meaning="water")
+        conn.close()
+
+        df = srs_app_full.discover_new_kanji(meaning_search="one's")
+
+        assert list(df["Character"]) == ["己"]
+
+    def test_condition_params_come_before_the_meaning_search(self, srs_app_full, tmp_dbs):
+        full_db, _ = tmp_dbs
+        conn = sqlite3.connect(full_db)
+        _insert_vocab(conn, kanji_writing="飲む", kana_writing="のむ", meaning="to drink")
+        _insert_vocab(conn, kanji_writing="飲み物", kana_writing="のみもの", meaning="drink, beverage")
+        conn.close()
+
+        df = srs_app_full.discover_new_vocab(condition="v.KanjiWriting = ?", params=["飲む"], meaning_search="drink")
+
+        assert list(df["KanjiWriting"]) == ["飲む"]
+
+    def test_filter_study_items_params(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        insert_srs_item(conn, associated_vocab="自分", meanings="one's self")
+        insert_srs_item(conn, associated_vocab="飲む", meanings="to drink")
+        conn.close()
+
+        df = srs_app.filter_study_items("vocab", condition="Meanings LIKE ?", params=["%one's%"])
+
+        assert list(df["AssociatedVocab"]) == ["自分"]
+
+
+# ---------------------------------------------------------------------------
+# next review dates follow each grade's configured unit
+# ---------------------------------------------------------------------------
+
+class TestReviewIntervals:
+    def _next_date(self, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        value = conn.execute("SELECT NextAnswerDateISO FROM SrsEntrySet").fetchone()[0]
+        conn.close()
+        return value
+
+    def _hours_from_now(self, date_str):
+        due = datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+        return (due - datetime.now(timezone.utc)).total_seconds() / 3600
+
+    def test_new_item_uses_grade_zeros_unit(self, srs_app, tmp_dbs):
+        """add_review_item used to read grade 0's interval as hours, whatever its unit."""
+        srs_app.srs_interval = {**TEST_SRS_INTERVAL, "0": {"value": 2, "unit": "days"}}
+
+        srs_app.add_review_item(make_nicegui_item("vocab", "食べる", "to eat", "たべる"))
+
+        assert self._hours_from_now(self._next_date(tmp_dbs)) == pytest.approx(48, abs=0.1)
+
+    def test_answer_uses_any_timedelta_unit(self, srs_app, tmp_dbs):
+        """Units other than hours/days used to raise UnboundLocalError when answering."""
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        item_id = insert_srs_item(conn, associated_vocab="食べる", current_grade=0)
+        conn.close()
+        srs_app.srs_interval = {**TEST_SRS_INTERVAL, "1": {"value": 30, "unit": "minutes"}}
+
+        srs_app.update_review_item(item_id, True)
+
+        assert self._hours_from_now(self._next_date(tmp_dbs)) == pytest.approx(0.5, abs=0.02)
+
+    def test_last_grade_stops_reviews(self, srs_app, tmp_dbs):
+        _, srs_db = tmp_dbs
+        conn = sqlite3.connect(srs_db)
+        item_id = insert_srs_item(conn, associated_vocab="食べる", current_grade=7)
+        conn.close()
+
+        srs_app.update_review_item(item_id, True)   # grade 8: value -1
+
+        assert self._next_date(tmp_dbs) is None
